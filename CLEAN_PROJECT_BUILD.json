@@ -1,0 +1,12 @@
+{
+  "file_count": 53,
+  "manifest_content_signature_sha256": "f7f0010fea1875ea3a5def0105b57def0bd085a376c1416249d89a49e6b4a971",
+  "manifest_sha256": "3c8e67f9448e6a624fb2a6356b8e846682f1560409302f0eac58cd74ff76cd53",
+  "numerical_results_included": false,
+  "output": "/home/crellamaybe/fathi-clean-projects/fathi-current-035e7a7",
+  "result": "PASS_CLEAN_PROJECT_BUILD",
+  "schema_version": 2,
+  "source_branch": "feature/current-iteration-engine-exact-reverse-20260902",
+  "source_commit": "035e7a751aaf92225f936524550d2fb1d8ec88c0",
+  "source_only": true
+}

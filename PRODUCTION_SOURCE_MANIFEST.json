@@ -1,0 +1,371 @@
+{
+  "content_signature_sha256": "f7f0010fea1875ea3a5def0105b57def0bd085a376c1416249d89a49e6b4a971",
+  "file_count": 53,
+  "files": [
+    {
+      "bytes": 3008,
+      "executable": false,
+      "path": "CURRENT_ITERATION_RUNBOOK.md",
+      "sha256": "f122784effd47ce6156ace0cc65cc83b1f7860d9a0e5bf1a7bbd63f4c13c08c5"
+    },
+    {
+      "bytes": 3296,
+      "executable": false,
+      "path": "FINAL_CURRENT_ITERATION_ENGINE_CERTIFICATION.md",
+      "sha256": "097d80dbf182637d3cf81add22cd4d63c1bb1642443b9f3c8896e3a19294b4b1"
+    },
+    {
+      "bytes": 1077,
+      "executable": false,
+      "path": "ITER002_TO_ITER003_FINAL_CLOSURE.md",
+      "sha256": "6761c2c1dfb5657509379db593a36529787f9a20d109df00ec5410427983fc37"
+    },
+    {
+      "bytes": 36156,
+      "executable": false,
+      "path": "README.md",
+      "sha256": "f1197dcdc9c2e704ae71c0f2fec3c6c397f7c8c84780f36374a1f40b16f76121"
+    },
+    {
+      "bytes": 2820,
+      "executable": false,
+      "path": "configs/fathi_s43_repro_p20_t052_immutable_assets.json",
+      "sha256": "dc71fb6b32c2d1fbd2c7aab1d6bcae9bcd0a39dced009e3b12f93b7de28518e6"
+    },
+    {
+      "bytes": 2695,
+      "executable": false,
+      "path": "configs/fathi_s43_repro_p20_t052_iteration_engine.json",
+      "sha256": "ccf5386b91d80d0389b257bc04c10c839dd5e1c2e7b9b97f2222675cb210b3e8"
+    },
+    {
+      "bytes": 208024,
+      "executable": false,
+      "path": "configs/fathi_s43_repro_p20_t052_runtime.json",
+      "sha256": "dc37063df8b4e79f45dd4d937ef8dd7dbf68f2952ae3e2bad5d81a464b75d9fe"
+    },
+    {
+      "bytes": 175,
+      "executable": false,
+      "path": "pytest.ini",
+      "sha256": "58cc6ed8c96c12a340cf88e8a3699bb0c5354022d720745f3c546c3b26c8465f"
+    },
+    {
+      "bytes": 16060,
+      "executable": false,
+      "path": "scripts/exact_adjoint/audit_real_s43_pml_material_sensitivity.py",
+      "sha256": "f531fbd4b9f69343f05eb0dafe31de3cd3b10a9ec481b551c94540381e65b2f5"
+    },
+    {
+      "bytes": 17683,
+      "executable": false,
+      "path": "scripts/exact_adjoint/build_real_s43_coupled_mass.py",
+      "sha256": "e611ebbd66f31d98976fead51417ff47d42554008e8e953f63f75129f2676ecc"
+    },
+    {
+      "bytes": 22356,
+      "executable": false,
+      "path": "scripts/exact_adjoint/build_real_s43_pml_coefficients.py",
+      "sha256": "56924068c186e6e4eb559e3eac42fa7dba55f3a8bcc534c2995481b51d2ef240"
+    },
+    {
+      "bytes": 23863,
+      "executable": false,
+      "path": "scripts/exact_adjoint/certify_exact_adjoint_with_fixed_dt_fd.py",
+      "sha256": "9314afb0123f882d4fff1440ee58314d012d9ed6fdca86015a9a98ebd350af17"
+    },
+    {
+      "bytes": 16601,
+      "executable": false,
+      "path": "scripts/exact_adjoint/real_s43_global_operator.py",
+      "sha256": "73472e48cc66f9c137af33694f967d10fe6e1989a9aa18d2f9576750884b2643"
+    },
+    {
+      "bytes": 40113,
+      "executable": false,
+      "path": "scripts/exact_adjoint/real_s43_pml_operator.py",
+      "sha256": "16f27efece663bedf47ca558e923a0fcc814b4d05886a8713aa2a2081d73cd31"
+    },
+    {
+      "bytes": 16635,
+      "executable": false,
+      "path": "scripts/exact_adjoint/real_s43_solid_operator.py",
+      "sha256": "aa6ccb03ebe721e740b7f98f89220ba5aa2816fc229a425b70f0dc5895f5a49e"
+    },
+    {
+      "bytes": 7024,
+      "executable": false,
+      "path": "scripts/exact_adjoint/real_s43_solid_pml_interface.py",
+      "sha256": "5af8a7994b6f353190f144c8c9d368bf58b1edf491dd6184157acdf963b43126"
+    },
+    {
+      "bytes": 32883,
+      "executable": false,
+      "path": "scripts/exact_adjoint/run_real_s43_exact_material_gradient.py",
+      "sha256": "2c17ef2e4e1713e2d952ac2f300ba0c82698dda0bebb9b81997513dd85e540ca"
+    },
+    {
+      "bytes": 24862,
+      "executable": true,
+      "path": "scripts/exact_adjoint/s43_external_forward.py",
+      "sha256": "7d5aac476a03bb4839b1ab52a7dea1076ac4b4b3abebc122eb6ace2ebd0ce9c9"
+    },
+    {
+      "bytes": 8122,
+      "executable": false,
+      "path": "scripts/exact_adjoint/s43_external_reverse_core.py",
+      "sha256": "868bf445a3f1444b197ec716790fe8daa014e3bd1ef05008f18a9c4b1aa6d870"
+    },
+    {
+      "bytes": 6839,
+      "executable": true,
+      "path": "scripts/fathi_benchmark/audit_current_iteration.py",
+      "sha256": "f38423061f7e1610bc10c7d6c00bef3857b1ba8e908ebd7f8cf2498d22baccc3"
+    },
+    {
+      "bytes": 380,
+      "executable": true,
+      "path": "scripts/fathi_benchmark/audit_current_iteration.sh",
+      "sha256": "ae4d1eb7b826f65ffc25da77b580136e36bc5582920b6d1fffb1aa55086319a0"
+    },
+    {
+      "bytes": 41270,
+      "executable": false,
+      "path": "scripts/fathi_benchmark/bridge_certified_external_gradient.py",
+      "sha256": "e77d47203fe2a264167f1ffe2a39b5d92b9532a831cc6082a8c69e539a7a33c4"
+    },
+    {
+      "bytes": 6346,
+      "executable": true,
+      "path": "scripts/fathi_benchmark/build_clean_project.py",
+      "sha256": "4c3fd4f5e3fa18407d7d7e3ecaf899e523fe0b4fab09467c9c068364039f5f77"
+    },
+    {
+      "bytes": 528,
+      "executable": true,
+      "path": "scripts/fathi_benchmark/build_clean_project.sh",
+      "sha256": "19c2059085b7b48dbfc5c2639bdad33a742160826946300774e73e19b450f6e2"
+    },
+    {
+      "bytes": 14217,
+      "executable": true,
+      "path": "scripts/fathi_benchmark/build_current_certified_external_reference.py",
+      "sha256": "f850478544d83512e88ce000dca8c5cc5306ccd75026bcba10fdd7a0271a7b38"
+    },
+    {
+      "bytes": 9549,
+      "executable": true,
+      "path": "scripts/fathi_benchmark/build_production_source_manifest.py",
+      "sha256": "d26a739a1ebf94ed6f1c15312f5379080a191a16ab0c96b272a32d03ef69a345"
+    },
+    {
+      "bytes": 303,
+      "executable": true,
+      "path": "scripts/fathi_benchmark/build_production_source_manifest.sh",
+      "sha256": "4485170194606ab7301f32e07e47c698f18478c69ce6a82f7f3a2786136b81bd"
+    },
+    {
+      "bytes": 6557,
+      "executable": false,
+      "path": "scripts/fathi_benchmark/certified_gradient_bridge_utils.py",
+      "sha256": "476159a18ee94890b96b028eeb480321464d7aa0a7397dbdad8a73145d06ae20"
+    },
+    {
+      "bytes": 51726,
+      "executable": true,
+      "path": "scripts/fathi_benchmark/current_pipeline_artifacts.py",
+      "sha256": "be17494602312abe231860b97fa23ee9d96a0a4d53143085441a5871e147ae54"
+    },
+    {
+      "bytes": 7183,
+      "executable": false,
+      "path": "scripts/fathi_benchmark/current_pipeline_contracts.py",
+      "sha256": "5aa431180c462a569c9dfece39e88e9e5c6486ca0b9f7fa5590d5ac6f5ef8f6b"
+    },
+    {
+      "bytes": 6122,
+      "executable": false,
+      "path": "scripts/fathi_benchmark/external_armijo.py",
+      "sha256": "72972eede0b6c3093d81645a24e8a46417bafb0987f4bd36fb414f0d391951d2"
+    },
+    {
+      "bytes": 18138,
+      "executable": false,
+      "path": "scripts/fathi_benchmark/generic_iteration_runner.py",
+      "sha256": "35a390e1575ea28bdac179c4656f54c2224ac8f66fcecdd11c9cae76e3ab384d"
+    },
+    {
+      "bytes": 5205,
+      "executable": false,
+      "path": "scripts/fathi_benchmark/immutable_assets.py",
+      "sha256": "13cf001d895e0e6b75b8c4a79886d9475e80e4ecbf1aaa21da736d54f0c28b8c"
+    },
+    {
+      "bytes": 14401,
+      "executable": false,
+      "path": "scripts/fathi_benchmark/iteration_context.py",
+      "sha256": "fc872f10b0a41d484eb6e9cd7440b6bf3468f792e357264f20496fd20d79f1c6"
+    },
+    {
+      "bytes": 38667,
+      "executable": false,
+      "path": "scripts/fathi_benchmark/lbfgs_history.py",
+      "sha256": "35e935ea42e0a8e17a091237206348d110756ee14197879ad29d33bc033c1558"
+    },
+    {
+      "bytes": 3890,
+      "executable": false,
+      "path": "scripts/fathi_benchmark/line_search_contract.py",
+      "sha256": "9b15bf12c34a005c3937bd9b67bb052c71035b6f21a1864475dd251c61778524"
+    },
+    {
+      "bytes": 8879,
+      "executable": false,
+      "path": "scripts/fathi_benchmark/optimizer_state.py",
+      "sha256": "1c175fe3391fb4a6dd666508017fcdaeb7d574bea457a109b10f56ca229f4e18"
+    },
+    {
+      "bytes": 3517,
+      "executable": false,
+      "path": "scripts/fathi_benchmark/path_consistency.py",
+      "sha256": "65b2e991a974f968f10e23fb4b1a131a61b5d5d01b3f924a228e45582df9394d"
+    },
+    {
+      "bytes": 10171,
+      "executable": false,
+      "path": "scripts/fathi_benchmark/physical_space_optimizer.py",
+      "sha256": "8bec2bf4fd22dbb6c2ccffee0497eec6785aac651e2179584767ea7ed7f0c809"
+    },
+    {
+      "bytes": 11712,
+      "executable": false,
+      "path": "scripts/fathi_benchmark/register_certified_gradient.py",
+      "sha256": "b62a320c21fe8458bfa17364ee46970520b60d1e40e065c9c18241d3d63459b8"
+    },
+    {
+      "bytes": 29305,
+      "executable": false,
+      "path": "scripts/fathi_benchmark/run_certified_external_exact_reverse.py",
+      "sha256": "1ac861c7913faa6df998ec1a2a5826ea0adca8570af7f7ad8e1ebf3d89331e9c"
+    },
+    {
+      "bytes": 16100,
+      "executable": false,
+      "path": "scripts/fathi_benchmark/run_certified_external_parent_forward.py",
+      "sha256": "872292c73a5a032469650964095bff9e447e14ef7f7296f905b22b731c7e12ed"
+    },
+    {
+      "bytes": 18628,
+      "executable": false,
+      "path": "scripts/fathi_benchmark/run_certified_iteration.py",
+      "sha256": "c612638ffee030940acd96cb49f8be5d0fd6191d0762f0198bcd614e3e768783"
+    },
+    {
+      "bytes": 21417,
+      "executable": true,
+      "path": "scripts/fathi_benchmark/run_current_iteration.py",
+      "sha256": "78748fb5a6453b6efc5ce4a5d18365a13c6ff64cf78bc242e7e25bd78ffc96cb"
+    },
+    {
+      "bytes": 849,
+      "executable": true,
+      "path": "scripts/fathi_benchmark/run_current_iteration.sh",
+      "sha256": "020cce898f29f9cdb87539c5e36f9a20ff93763a33759e29d344239cd22597bf"
+    },
+    {
+      "bytes": 5893,
+      "executable": false,
+      "path": "scripts/fathi_benchmark/run_current_pipeline.py",
+      "sha256": "ae4dc9f463f445d0da6c7992694f01f87bb224d0fe685e79a83bd4b43f8eca8e"
+    },
+    {
+      "bytes": 25300,
+      "executable": true,
+      "path": "scripts/fathi_benchmark/run_exact_reverse_gradient_generic.py",
+      "sha256": "ce9841b8d9c43c67aab336796c11ab8821565f0cbd96c0df3b77f80dcfef09d1"
+    },
+    {
+      "bytes": 7913,
+      "executable": false,
+      "path": "scripts/fathi_benchmark/runtime_paths.py",
+      "sha256": "9a7bc3fe88a5f6a3f3f7c86bf8328d9bcc1a3c4c548b8fbe69f9aabd42dd9656"
+    },
+    {
+      "bytes": 19135,
+      "executable": false,
+      "path": "tests/test_bridge_certified_external_gradient_current.py",
+      "sha256": "2f3b86b1d4c7a664d43245330a735b8494ee18c0a0b3764eb244b3d0893d2703"
+    },
+    {
+      "bytes": 11171,
+      "executable": true,
+      "path": "tests/test_current_iteration_routing.py",
+      "sha256": "d68d48ecf25a40455d90011aa8bf74bdd6551a13f8a020e6a79594647894042a"
+    },
+    {
+      "bytes": 30071,
+      "executable": false,
+      "path": "tests/test_current_pipeline_contract_repairs.py",
+      "sha256": "d1c2471ef333bfdbd62921d51d9ed1d65a232fbff329792da22cc395701ef832"
+    },
+    {
+      "bytes": 5673,
+      "executable": false,
+      "path": "tests/test_current_pipeline_integration_static.py",
+      "sha256": "194217299e855f00ed41ad73cc01eca52a2d659a4b9d47552d257db799550856"
+    },
+    {
+      "bytes": 5259,
+      "executable": false,
+      "path": "tests/test_exact_reverse_gradient_generic.py",
+      "sha256": "d5a1c130477ae34b3966d748fc3a9be534542eab5fb7441c1bb219354283b787"
+    }
+  ],
+  "policy": {
+    "legacy_routes_excluded": true,
+    "numerical_results_included": false,
+    "source_only": true
+  },
+  "production_roots": [
+    "CURRENT_ITERATION_RUNBOOK.md",
+    "FINAL_CURRENT_ITERATION_ENGINE_CERTIFICATION.md",
+    "ITER002_TO_ITER003_FINAL_CLOSURE.md",
+    "README.md",
+    "configs/fathi_s43_repro_p20_t052_immutable_assets.json",
+    "configs/fathi_s43_repro_p20_t052_iteration_engine.json",
+    "configs/fathi_s43_repro_p20_t052_runtime.json",
+    "pytest.ini",
+    "scripts/exact_adjoint/real_s43_global_operator.py",
+    "scripts/exact_adjoint/s43_external_forward.py",
+    "scripts/exact_adjoint/s43_external_reverse_core.py",
+    "scripts/fathi_benchmark/audit_current_iteration.py",
+    "scripts/fathi_benchmark/audit_current_iteration.sh",
+    "scripts/fathi_benchmark/bridge_certified_external_gradient.py",
+    "scripts/fathi_benchmark/build_clean_project.py",
+    "scripts/fathi_benchmark/build_clean_project.sh",
+    "scripts/fathi_benchmark/build_current_certified_external_reference.py",
+    "scripts/fathi_benchmark/build_production_source_manifest.py",
+    "scripts/fathi_benchmark/build_production_source_manifest.sh",
+    "scripts/fathi_benchmark/current_pipeline_artifacts.py",
+    "scripts/fathi_benchmark/register_certified_gradient.py",
+    "scripts/fathi_benchmark/run_certified_external_exact_reverse.py",
+    "scripts/fathi_benchmark/run_certified_external_parent_forward.py",
+    "scripts/fathi_benchmark/run_current_iteration.py",
+    "scripts/fathi_benchmark/run_current_iteration.sh",
+    "scripts/fathi_benchmark/run_current_pipeline.py",
+    "scripts/fathi_benchmark/run_exact_reverse_gradient_generic.py",
+    "tests/test_bridge_certified_external_gradient_current.py",
+    "tests/test_current_iteration_routing.py",
+    "tests/test_current_pipeline_contract_repairs.py",
+    "tests/test_current_pipeline_integration_static.py",
+    "tests/test_exact_reverse_gradient_generic.py"
+  ],
+  "result": "PASS_PRODUCTION_SOURCE_MANIFEST",
+  "schema_version": 2,
+  "source": {
+    "branch": "feature/current-iteration-engine-exact-reverse-20260902",
+    "clean_worktree": true,
+    "commit": "035e7a751aaf92225f936524550d2fb1d8ec88c0",
+    "repo": "/home/crellamaybe/fathi-benchmark-current-upload-20260902"
+  }
+}
