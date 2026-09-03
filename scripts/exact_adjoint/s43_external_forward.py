@@ -26,6 +26,7 @@ from scripts.exact_adjoint.real_s43_global_operator import (
 )
 from scripts.exact_adjoint.real_s43_solid_operator import load_solid_data
 from scripts.exact_adjoint.run_real_s43_exact_material_gradient import zero_state
+from scripts.fathi_benchmark.runtime_paths import runtime_resolve_path
 
 
 def sha256_file(path):
@@ -63,10 +64,10 @@ def atomic_save_npz(path, **values):
 
 
 def _reference_path(repo, value):
-    path = Path(value).expanduser()
-    if not path.is_absolute():
-        path = Path(repo) / path
-    return path.resolve()
+    return runtime_resolve_path(
+        value,
+        repo_root=Path(repo).resolve(),
+    )
 
 
 def load_certified_reference(repo, run, reference_manifest):
