@@ -331,16 +331,10 @@ class ExternalForwardDriver:
         )
 
         def configured_array(value, label):
-            path = Path(value).expanduser()
-
-            if not path.is_absolute():
-                path = (
-                    self.paths["repo"]
-                    /
-                    path
-                )
-
-            path = path.resolve()
+            path = runtime_resolve_path(
+                value,
+                repo_root=Path(self.paths["repo"]).resolve(),
+            )
 
             if not path.is_file():
                 raise RuntimeError(
