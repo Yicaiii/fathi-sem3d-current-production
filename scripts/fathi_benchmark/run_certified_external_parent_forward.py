@@ -22,6 +22,7 @@ from scripts.exact_adjoint.s43_external_forward import (
     sha256_file,
 )
 from scripts.fathi_benchmark.runtime_paths import (
+    runtime_resolve_path,
     iteration_runtime_paths,
     resolve_path,
 )
@@ -74,8 +75,10 @@ def atomic_json(path: Path, payload: dict) -> None:
 
 
 def manifest_asset(repo: Path, value: str) -> Path:
-    path = Path(value).expanduser()
-    return (path if path.is_absolute() else repo / path).resolve()
+    return runtime_resolve_path(
+        value,
+        repo_root=repo,
+    )
 
 
 def expected_parent_objective(
