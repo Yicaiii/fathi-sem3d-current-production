@@ -10,10 +10,16 @@ import subprocess
 import sys
 from typing import Any, Mapping
 
+import numpy as np
+
 from scripts.fathi_benchmark.current_pipeline_artifacts import (
     CandidateEvaluation,
     generate_raw_alpha_candidate,
     evaluate_candidate_external,
+)
+from scripts.fathi_benchmark.certified_data_objective import (
+    certified_data_objective,
+    float64_diagnostic,
 )
 from scripts.fathi_benchmark.current_pipeline_contracts import (
     SCHEMA_VERSION,
@@ -328,6 +334,7 @@ def persist_parent_regularized_objective(
 class RegularizedCandidateEvaluation:
     external: CandidateEvaluation
     tv_gate_record: Mapping[str, Any]
+    data_objective_record: Mapping[str, Any]
     objective: Mapping[str, float]
 
 
@@ -398,6 +405,49 @@ def evaluate_candidate_regularized(
     if tv_gate.get("result") != "PASS_FATHI_TV_PHASE1_GATE":
         raise RuntimeError("candidate TV gate is not PASS")
 
+    reference_payload = _json(reference_manifest)
+    certified_dt = float(reference_payload["contract"]["dt"])
+    current_receiver_path = verify_artifact_record(
+        root,
+        external.current_receiver,
+        label="regularized candidate current receiver",
+    )
+    true_receiver_path = verify_artifact_record(
+        root,
+        external.true_receiver,
+        label="regularized candidate TRUE receiver",
+    )
+    current_receiver = np.asarray(
+        np.load(current_receiver_path), dtype=np.float64
+    )
+    true_receiver = np.asarray(
+        np.load(true_receiver_path), dtype=np.float64
+    )
+    data_eval = certified_data_objective(
+        current_receiver,
+        true_receiver,
+        certified_dt=certified_dt,
+        driver_dt=float(external.dt),
+    )
+    data_diag_path = trial_dir / "candidate_data_objective.json"
+    data_diag = {
+        "schema_version": 1,
+        "result": "PASS_CERTIFIED_CANDIDATE_DATA_OBJECTIVE",
+        "run_id": paths.identity.run_id,
+        "parent_iteration": paths.identity.parent_iteration,
+        "child_iteration": paths.identity.child_iteration,
+        "transition": paths.identity.transition_id,
+        "candidate_summary": artifact_record(candidate_path, repo=root),
+        "current_receiver": dict(external.current_receiver),
+        "true_receiver": dict(external.true_receiver),
+        "objective": data_eval.diagnostic(),
+        "legacy_driver_dt_objective": float64_diagnostic(
+            float(external.objective)
+        ),
+        "canonical_quadrature_dt_source": "reference.contract.dt",
+    }
+    atomic_json(data_diag_path, data_diag)
+
     q_lambda = float(
         tv_gate["parent_material_audit"]["lambda"]["value"]
     )
@@ -405,7 +455,7 @@ def evaluate_candidate_regularized(
         tv_gate["parent_material_audit"]["mu"]["value"]
     )
     objective = compose_frozen_regularized_objective(
-        data_objective=float(external.objective),
+        data_objective=float(data_eval.value),
         q_lambda=q_lambda,
         q_mu=q_mu,
         beta_lambda=float(beta_lambda),
@@ -414,6 +464,7 @@ def evaluate_candidate_regularized(
     return RegularizedCandidateEvaluation(
         external=external,
         tv_gate_record=artifact_record(tv_gate_path, repo=root),
+        data_objective_record=artifact_record(data_diag_path, repo=root),
         objective=objective,
     )
 
@@ -615,6 +666,9 @@ def execute_regularized_armijo(
                 evaluation.external.true_receiver
             ),
             "candidate_tv_gate": dict(evaluation.tv_gate_record),
+            "candidate_data_objective": dict(
+                evaluation.data_objective_record
+            ),
             "registered_gradient": dict(registered_gradient_record),
             "durable_direction": dict(direction_record),
             "parent_accepted_model": dict(accepted_parent_record),

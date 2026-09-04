@@ -11,8 +11,9 @@ from pathlib import Path
 
 import numpy as np
 
-from scripts.exact_adjoint.certify_exact_adjoint_with_fixed_dt_fd import (
-    trapezoid_weights,
+from scripts.fathi_benchmark.certified_data_objective import (
+    certified_data_objective,
+    float64_diagnostic,
 )
 from scripts.exact_adjoint.s43_external_forward import (
     ExternalForwardDriver,
@@ -81,6 +82,85 @@ def manifest_asset(repo: Path, value: str) -> Path:
     )
 
 
+
+def _json_string_leaves(value, path=()):
+    if isinstance(value, dict):
+        for key, child in value.items():
+            yield from _json_string_leaves(child, path + (str(key),))
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            yield from _json_string_leaves(child, path + (str(index),))
+    elif isinstance(value, str):
+        yield path, value
+
+
+def resolve_stage5n_current_receiver(
+    repo: Path,
+    stage5n_summary_path: Path,
+    *,
+    expected_sha256: str,
+) -> tuple[Path, dict]:
+    payload = json.loads(stage5n_summary_path.read_text(encoding="utf-8"))
+    candidates = []
+    seen = set()
+
+    for json_path, raw_value in _json_string_leaves(payload):
+        if Path(raw_value).name != "current_external_receiver.npy":
+            continue
+        try:
+            resolved = manifest_asset(repo, raw_value).resolve()
+        except Exception:
+            continue
+        key = str(resolved)
+        if key in seen or not resolved.is_file():
+            continue
+        seen.add(key)
+        digest = sha256_file(resolved)
+        candidates.append(
+            {
+                "json_path": ".".join(json_path),
+                "raw_value": raw_value,
+                "resolved_path": key,
+                "sha256": digest,
+                "matches_expected_sha256": digest == expected_sha256,
+            }
+        )
+
+    matching = [
+        item for item in candidates
+        if item["matches_expected_sha256"]
+    ]
+    if not matching:
+        raise RuntimeError(
+            "iter000 Stage5N summary has no current_external_receiver.npy "
+            "whose SHA256 matches the completed regularized parent forward; "
+            f"candidate_count={len(candidates)}"
+        )
+
+    matching.sort(
+        key=lambda item: (
+            len(item["json_path"]),
+            item["json_path"],
+            item["resolved_path"],
+        )
+    )
+    selected = matching[0]
+    evidence = {
+        "classification": (
+            "STAGE5N_CURRENT_RECEIVER_RESOLVED_BY_REFERENCED_ARTIFACT_SHA256"
+        ),
+        "stage5n_summary": str(stage5n_summary_path.resolve()),
+        "expected_sha256": expected_sha256,
+        "candidate_count": len(candidates),
+        "matching_candidate_count": len(matching),
+        "selected_json_path": selected["json_path"],
+        "selected_path": selected["resolved_path"],
+        "selected_sha256": selected["sha256"],
+        "candidates": candidates,
+    }
+    return Path(selected["resolved_path"]), evidence
+
+
 def expected_parent_objective(
     repo: Path,
     reference: dict,
@@ -128,6 +208,14 @@ def main() -> None:
     parser.add_argument("--output-dir")
     parser.add_argument("--batch-size", type=int, default=2048)
     parser.add_argument("--checkpoint-interval", type=int, default=100)
+    parser.add_argument(
+        "--certify-existing",
+        action="store_true",
+        help=(
+            "Certify already-completed parent-forward artifacts without "
+            "launching another numerical forward."
+        ),
+    )
     args = parser.parse_args()
 
     if args.iter_k < 0:
@@ -206,8 +294,9 @@ def main() -> None:
         int(contract["receiver_count"]),
         int(contract["component_count"]),
     )
+    certified_dt = float(contract["dt"])
     if not math.isclose(
-        driver.dt, float(contract["dt"]), rel_tol=0.0, abs_tol=1.0e-18
+        driver.dt, certified_dt, rel_tol=0.0, abs_tol=1.0e-18
     ):
         raise RuntimeError("driver dt differs from certified reference")
     if driver.receiver_count != expected_shape[1]:
@@ -272,29 +361,71 @@ def main() -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     checkpoint_path = output_dir / "checkpoint" / "current_latest.npz"
     retained_dir = output_dir / "checkpoint" / "current_primal_retained"
-    run_summary = run_external_forward(
-        driver,
-        sample_count,
-        {"primal": current_path},
-        checkpoint_path,
-        checkpoint_interval=args.checkpoint_interval,
-        retained_primal_dir=retained_dir,
-    )
+    retained_last = retained_dir / f"primal_{sample_count:06d}.npz"
+
+    if args.certify_existing:
+        missing_existing = [
+            str(path)
+            for path in (current_path, checkpoint_path, retained_last)
+            if not path.is_file()
+        ]
+        if missing_existing:
+            raise RuntimeError(
+                "cannot certify incomplete existing parent forward: "
+                + ", ".join(missing_existing)
+            )
+        run_summary = {
+            "classification": (
+                "RECERTIFIED_EXISTING_COMPLETED_EXTERNAL_FORWARD_NO_RERUN"
+            ),
+            "signature_sha256": signature,
+            "reused_existing_artifacts": True,
+            "current_invocation_external_forwards": 0,
+        }
+    else:
+        run_summary = run_external_forward(
+            driver,
+            sample_count,
+            {"primal": current_path},
+            checkpoint_path,
+            checkpoint_interval=args.checkpoint_interval,
+            retained_primal_dir=retained_dir,
+        )
 
     current = load_external(current_path, expected_shape)
     truth = load_external(Path(driver.paths["true_external"]), expected_shape)
     residual = current - truth
-    time_grid = np.arange(sample_count, dtype=np.float64) * driver.dt
-    weights = trapezoid_weights(time_grid)
-    objective = 0.5 * float(
-        np.sum(weights[:, None, None] * residual * residual)
+    objective_eval = certified_data_objective(
+        current,
+        truth,
+        certified_dt=certified_dt,
+        driver_dt=float(driver.dt),
+    )
+    objective = float(objective_eval.value)
+    legacy_driver_dt_eval = certified_data_objective(
+        current,
+        truth,
+        certified_dt=float(driver.dt),
+        driver_dt=float(driver.dt),
     )
     relative = abs(objective - expected_j) / max(
         abs(expected_j), np.finfo(np.float64).tiny
     )
-    retained_last = retained_dir / f"primal_{sample_count:06d}.npz"
+    current_receiver_hash = sha256_file(current_path)
     accepted_receiver_hash = None
-    if int(args.iter_k) > 0:
+    accepted_receiver_path = None
+    accepted_receiver_resolution = None
+    if int(args.iter_k) == 0:
+        (
+            accepted_receiver_path,
+            accepted_receiver_resolution,
+        ) = resolve_stage5n_current_receiver(
+            repo,
+            expected_j_source,
+            expected_sha256=current_receiver_hash,
+        )
+        accepted_receiver_hash = sha256_file(accepted_receiver_path)
+    else:
         accepted_payload = json.loads(expected_j_source.read_text(encoding="utf-8"))
         accepted_receiver = accepted_payload.get("accepted_external_receiver")
         if isinstance(accepted_receiver, dict):
@@ -310,7 +441,6 @@ def main() -> None:
                 repo, str(trial["candidate_external_receiver"])
             )
         accepted_receiver_hash = sha256_file(accepted_receiver_path)
-    current_receiver_hash = sha256_file(current_path)
     gates = {
         "reference_manifest_pass": True,
         "reference_true_external_hash": True,
@@ -328,7 +458,54 @@ def main() -> None:
     }
     if not all(gates.values()):
         failed = [name for name, passed in gates.items() if not passed]
+        failure_diagnostic = {
+            "schema_version": 1,
+            "result": "BLOCK_CERTIFIED_PARENT_EXTERNAL_FORWARD_GATE",
+            "run_id": run,
+            "iteration": int(args.iter_k),
+            "transition": runtime["transition"],
+            "failed_gates": failed,
+            "gates": gates,
+            "objective_diagnostic": objective_eval.diagnostic(
+                expected=expected_j
+            ),
+            "legacy_driver_dt_objective": {
+                **float64_diagnostic(legacy_driver_dt_eval.value),
+                "equal_expected": (
+                    legacy_driver_dt_eval.value == expected_j
+                ),
+            },
+            "expected_j_source": str(expected_j_source),
+            "reference_manifest": str(reference_path),
+            "current_receiver_sha256": current_receiver_hash,
+            "accepted_receiver_sha256": accepted_receiver_hash,
+            "accepted_receiver_resolution": accepted_receiver_resolution,
+        }
+        atomic_json(output_dir / "failure_diagnostic.json", failure_diagnostic)
         raise RuntimeError("parent-forward gates failed: " + ", ".join(failed))
+
+    recertification = {
+        "performed": bool(args.certify_existing),
+        "classification": (
+            "RECERTIFIED_EXISTING_COMPLETED_PARENT_FORWARD_AFTER_DT_CONTRACT_ROOT_CAUSE"
+            if args.certify_existing
+            else "LIVE_CERTIFIED_PARENT_FORWARD"
+        ),
+        "root_cause": (
+            "DRIVER_DT_ONE_ULP_BELOW_CERTIFIED_OBJECTIVE_DT"
+            if objective_eval.dt_ulp_distance == 1
+            and legacy_driver_dt_eval.value != expected_j
+            and objective == expected_j
+            else "NONE_OBSERVED"
+        ),
+        "driver_dt": float64_diagnostic(float(driver.dt)),
+        "certified_objective_dt": float64_diagnostic(certified_dt),
+        "dt_ulp_distance": objective_eval.dt_ulp_distance,
+        "legacy_driver_dt_J": float64_diagnostic(legacy_driver_dt_eval.value),
+        "certified_dt_J": float64_diagnostic(objective),
+        "expected_J": float64_diagnostic(expected_j),
+        "numerical_reruns_after_initial_completed_forward": 0,
+    }
 
     summary = {
         "schema_version": 1,
@@ -367,14 +544,27 @@ def main() -> None:
             "sample_count": sample_count,
             "receiver_count": expected_shape[1],
             "component_count": expected_shape[2],
-            "dt": driver.dt,
+            "dt": certified_dt,
+            "driver_dt": float(driver.dt),
+            "dt_ulp_distance": objective_eval.dt_ulp_distance,
+            "certified_quadrature_dt_source": "reference.contract.dt",
             "residual_l2": float(np.linalg.norm(residual.reshape(-1))),
         },
         "external_forward": run_summary,
+        "recertification": recertification,
         "driver_signature_sha256": driver.signature,
         "forward_run_signature_sha256": str(
             run_summary.get("signature_sha256", signature)
         ),
+        "certified_parent_receiver_reference": {
+            "path": (
+                str(accepted_receiver_path)
+                if accepted_receiver_path is not None
+                else None
+            ),
+            "sha256": accepted_receiver_hash,
+            "resolution": accepted_receiver_resolution,
+        },
         "current_external_receiver": {
             **artifact_record(current_path, repo=repo),
             "bitwise_equal_to_accepted_parent": gates[
@@ -402,6 +592,9 @@ def main() -> None:
         "gates": gates,
         "sem3d_runs": 0,
         "full_external_forwards": 1,
+        "current_invocation_external_forwards": (
+            0 if args.certify_existing else 1
+        ),
     }
     atomic_json(summary_path, summary)
     print(f"RESULT = {pass_result}")

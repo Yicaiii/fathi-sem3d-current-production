@@ -281,29 +281,46 @@ def main() -> None:
     if _pass(primal_summary, retained_primal_result(parent)):
         print(f"PARENT_FORWARD = REUSE {primal_summary}")
     else:
-        _run(
-            [
-                sys.executable,
-                str(
-                    repo
-                    / "scripts/fathi_benchmark/"
-                    "run_certified_external_parent_forward.py"
-                ),
-                "--repo",
-                str(repo),
-                "--config",
-                str(runtime_path),
-                "--iter-k",
-                str(parent),
-                "--reference-manifest",
-                str(reference_path),
-                "--batch-size",
-                str(args.batch_size),
-                "--checkpoint-interval",
-                str(args.checkpoint_interval),
-            ],
-            cwd=repo,
+        parent_forward_command = [
+            sys.executable,
+            str(
+                repo
+                / "scripts/fathi_benchmark/"
+                "run_certified_external_parent_forward.py"
+            ),
+            "--repo",
+            str(repo),
+            "--config",
+            str(runtime_path),
+            "--iter-k",
+            str(parent),
+            "--reference-manifest",
+            str(reference_path),
+            "--batch-size",
+            str(args.batch_size),
+            "--checkpoint-interval",
+            str(args.checkpoint_interval),
+        ]
+        reference = _json(reference_path)
+        sample_count = int(reference["contract"]["sample_count"])
+        primal_dir = paths.exact_reverse / "primal_forward"
+        completed_existing = (
+            (primal_dir / "current_external_receiver.npy").is_file()
+            and (primal_dir / "checkpoint" / "current_latest.npz").is_file()
+            and (
+                primal_dir
+                / "checkpoint"
+                / "current_primal_retained"
+                / f"primal_{sample_count:06d}.npz"
+            ).is_file()
         )
+        if completed_existing:
+            print(
+                "PARENT_FORWARD = RECERTIFY_EXISTING_COMPLETED_ARTIFACTS "
+                "(no numerical rerun)"
+            )
+            parent_forward_command.append("--certify-existing")
+        _run(parent_forward_command, cwd=repo)
     if args.stop_after == "parent-forward":
         return
 

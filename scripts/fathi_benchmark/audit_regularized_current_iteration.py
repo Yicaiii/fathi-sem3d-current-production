@@ -10,6 +10,7 @@ from scripts.fathi_benchmark.current_pipeline_contracts import (
     accepted_model_result,
     optimizer_direction_result,
     registered_gradient_result,
+    retained_primal_result,
     sha256_file,
 )
 from scripts.fathi_benchmark.iteration_context import build_iteration_paths
@@ -68,6 +69,9 @@ def main() -> None:
         runtime_root=runtime_paths["runtime_root"],
     )
 
+    parent_forward_path = (
+        paths.exact_reverse / "primal_forward" / "summary.json"
+    )
     registered_path = paths.gradient_root / "registered_gradient.json"
     direction_path = (
         paths.optimizer_root
@@ -80,11 +84,29 @@ def main() -> None:
     armijo_path = paths.line_search_root / "armijo_summary.json"
     child_path = paths.child_accepted / "accepted_summary.json"
 
+    parent_forward = _json(parent_forward_path)
     registered = _json(registered_path)
     direction = _json(direction_path)
     parent_obj = _json(parent_obj_path)
     armijo = _json(armijo_path)
     accepted = _json(child_path)
+
+    _require(
+        parent_forward.get("result") == retained_primal_result(parent),
+        "regularized parent forward result mismatch",
+    )
+    _require(
+        parent_forward.get("objective", {}).get(
+            "certified_quadrature_dt_source"
+        )
+        == "reference.contract.dt",
+        "parent data objective did not use certified reference dt",
+    )
+    _require(
+        parent_forward.get("recertification", {}).get("root_cause")
+        == "DRIVER_DT_ONE_ULP_BELOW_CERTIFIED_OBJECTIVE_DT",
+        "Gate4C dt root cause was not preserved in parent-forward provenance",
+    )
 
     _require(
         registered.get("result") == registered_gradient_result(parent),
@@ -208,6 +230,9 @@ def main() -> None:
         "child_iteration": child,
         "transition": paths.identity.transition_id,
         "accepted_alpha": float(trial["alpha"]),
+        "parent_forward_dt_root_cause": parent_forward[
+            "recertification"
+        ],
         "parent_data_J": float(parent_obj["J_data"]),
         "parent_total_J": float(parent_obj["J_total"]),
         "accepted_data_J": float(trial["candidate_data_objective"]),
@@ -217,6 +242,9 @@ def main() -> None:
         "mtilde_slope": float(direction["mtilde_slope"]),
         "history_count": 0,
         "hashes": {
+            "parent_forward_summary_sha256": sha256_file(
+                parent_forward_path
+            ),
             "registered_gradient_sha256": sha256_file(registered_path),
             "direction_summary_sha256": sha256_file(direction_path),
             "parent_regularized_objective_sha256": sha256_file(parent_obj_path),
