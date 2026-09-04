@@ -117,15 +117,34 @@ def _verify_file_record(
     *,
     label: str,
     expected_path: Path | None = None,
+    allow_equivalent_path: bool = False,
 ) -> Path:
     path = _recorded_path(repo, record)
-    if expected_path is not None and path != expected_path.resolve():
-        raise RuntimeError(f"{label} provenance path mismatch")
+
     if not path.is_file():
         raise RuntimeError(f"{label} provenance file is missing: {path}")
+
     expected_hash = str(record.get("sha256", ""))
     if not expected_hash or sha256_file(path) != expected_hash:
         raise RuntimeError(f"{label} provenance SHA-256 mismatch")
+
+    if expected_path is not None:
+        expected = expected_path.resolve()
+
+        if path != expected:
+            if not allow_equivalent_path:
+                raise RuntimeError(f"{label} provenance path mismatch")
+
+            if not expected.is_file():
+                raise RuntimeError(
+                    f"{label} expected provenance file is missing: {expected}"
+                )
+
+            if sha256_file(expected) != expected_hash:
+                raise RuntimeError(
+                    f"{label} equivalent-path SHA-256 mismatch"
+                )
+
     return path
 
 
@@ -253,6 +272,7 @@ def validate_current_reverse_contract(
         driver_assets.get("config", {}),
         label="reverse driver runtime config",
         expected_path=config_path,
+        allow_equivalent_path=True,
     )
 
     accepted_summary = (paths.parent_accepted / "accepted_summary.json").resolve()
