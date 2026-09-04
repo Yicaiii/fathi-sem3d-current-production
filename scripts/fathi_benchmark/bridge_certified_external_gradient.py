@@ -7,6 +7,8 @@ import hashlib
 import json
 import os
 from pathlib import Path
+
+from scripts.fathi_benchmark.runtime_paths import runtime_resolve_path
 from typing import Any, Mapping
 
 import h5py
@@ -94,13 +96,19 @@ def _recorded_path(repo: Path, record: Mapping[str, Any]) -> Path:
     value = record.get("resolved_path") or record.get("path")
     if not value:
         raise RuntimeError("provenance record has no path")
-    return resolve_path(str(value), base=repo)
+    return runtime_resolve_path(
+        str(value),
+        repo_root=repo,
+    )
 
 
 def _manifest_path(repo: Path, value: object) -> Path:
     if not value:
         raise RuntimeError("provenance manifest path is absent")
-    return resolve_path(str(value), base=repo)
+    return runtime_resolve_path(
+        str(value),
+        repo_root=repo,
+    )
 
 
 def _verify_file_record(

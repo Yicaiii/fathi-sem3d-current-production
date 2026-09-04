@@ -7,6 +7,8 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+
+from scripts.fathi_benchmark.runtime_paths import runtime_resolve_path
 import sys
 from typing import Any, Mapping
 
@@ -105,8 +107,10 @@ def _resolve(repo: Path, value: str | Path) -> Path:
 
 
 def _recorded_path(repo: Path, value: str | Path) -> Path:
-    path = Path(value).expanduser()
-    return path.resolve() if path.is_absolute() else (repo / path).resolve()
+    return runtime_resolve_path(
+        value,
+        repo_root=repo,
+    )
 
 
 def _below(path: Path, root: Path) -> bool:

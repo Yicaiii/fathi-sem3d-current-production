@@ -11,6 +11,8 @@ import hashlib
 import json
 import os
 from pathlib import Path
+
+from scripts.fathi_benchmark.runtime_paths import runtime_resolve_path
 from typing import Any, Mapping
 
 from scripts.fathi_benchmark.iteration_context import IterationPaths
@@ -158,7 +160,19 @@ def resolve_record_path(repo: str | Path, record: Mapping[str, Any]) -> Path:
         raise ValueError("artifact record requires path")
     path = Path(str(record["path"])).expanduser()
     root = Path(repo).expanduser().resolve()
-    return path.resolve() if path.is_absolute() else (root / path).resolve()
+    if path.is_absolute():
+        return path.resolve()
+
+    repository_candidate = (root / path).resolve()
+
+    if repository_candidate.exists():
+        return repository_candidate
+
+    return runtime_resolve_path(
+        path,
+        repo_root=root,
+        prefer_existing_legacy=False,
+    )
 
 
 def artifact_record(path: str | Path, *, repo: str | Path) -> dict[str, str]:
