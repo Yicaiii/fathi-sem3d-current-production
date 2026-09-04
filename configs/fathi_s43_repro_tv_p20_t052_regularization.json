@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "run_id": "fathi_s43_repro_tv_p20_t052",
+  "status": "GATE_ONLY_DO_NOT_RUN_E2E",
+  "baseline_run_id": "fathi_s43_repro_p20_t052",
+  "paper_target": "Fathi et al. (2015) Eq. 7, Eq. 9, Eq. 17, Eq. 18, Eq. 24 and Appendix C",
+  "regularization": {
+    "type": "smoothed_isotropic_q1_total_variation",
+    "material_coordinate": "MPa",
+    "spatial_coordinate": "m",
+    "epsilon_expression": "sqrt(|grad m|^2 + epsilon)",
+    "epsilon_gradient_sq_mpa2_per_m2": 0.01,
+    "quadrature": "2x2x2 Gauss-Legendre per Q1 hexahedral material element",
+    "denominator_evaluation": "pointwise_per_quadrature_point",
+    "eq24": {
+      "norm": "Euclidean L2",
+      "formula": "R = varrho * ||g_mis||_2 / ||g_reg||_2",
+      "required_coordinate_contract": "g_mis and g_reg must be in the same pre-Mtilde active control coordinate and units"
+    },
+    "varrho_policy": {
+      "type": "frequency_stage_piecewise_constant",
+      "classification": "PAPER_INFORMED_IMPLEMENTATION_CHOICE_NOT_EXPLICIT_FOR_SECTION_4_3",
+      "source_note": "Fathi Section 4.5 gives the explicit p20/p30/p40 schedule; Section 4.3 does not state its exact varrho.",
+      "p20": 0.5,
+      "p30": 0.4,
+      "p40": 0.3
+    },
+    "freeze_parameter_weights_within_line_search": true
+  },
+  "integration_gates": [
+    "GATE1_TV_Q1_MATHEMATICS",
+    "GATE2_TV_DIRECTIONAL_FINITE_DIFFERENCE",
+    "GATE3_TOTAL_CONTROL_GRADIENT_AND_OBJECTIVE",
+    "GATE4_SINGLE_REGULARIZED_ITERATION_E2E"
+  ],
+  "history_policy": {
+    "lbfgs_history": "RESET_AT_REGULARIZED_LINEAGE_START",
+    "reason": "objective/gradient changes from data-only to data-plus-TV"
+  }
+}
