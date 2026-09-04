@@ -13,6 +13,8 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+
+from scripts.fathi_benchmark.runtime_paths import runtime_resolve_path
 from typing import Any, Mapping
 
 from scripts.exact_adjoint.s43_external_forward import load_certified_reference, sha256_file
@@ -114,7 +116,10 @@ def _material_spec(
 
 
 def _canonical_mtilde_record(repo: Path, runtime: Mapping[str, Any]) -> dict[str, Any]:
-    path = resolve_path(str(runtime["mtilde_matrix_path"]), base=repo)
+    path = runtime_resolve_path(
+        str(runtime["mtilde_matrix_path"]),
+        repo_root=repo,
+    )
     return artifact_record(path, repo=repo)
 
 
@@ -477,7 +482,10 @@ def main() -> None:
         parent_payload = _json(accepted_summary)
         parent_objective = float(parent_payload["objective"]["accepted"])
         reference = _json(reference_path)
-        true_path = resolve_path(reference["certification_assets"]["true_external"], base=repo)
+        true_path = runtime_resolve_path(
+            reference["certification_assets"]["true_external"],
+            repo_root=repo,
+        )
         direction = _json(direction_summary)
         request = {
             "run_id": run,
