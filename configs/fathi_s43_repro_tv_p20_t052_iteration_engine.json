@@ -1,0 +1,96 @@
+{
+  "external_armijo": {
+    "alpha0": 1.0,
+    "c1": 0.0001,
+    "checkpoint_resume": true,
+    "maximum_backtracks": 12,
+    "normalization": "none",
+    "objective": "frozen-parent-weight regularized objective J_data + beta_lambda*Q_lambda + beta_mu*Q_mu",
+    "reuse_true_receiver": true,
+    "rho": 0.5
+  },
+  "gradient_contract": {
+    "legacy_component_rhs_route": "superseded",
+    "metric": "Mtilde",
+    "metric_inner_product": "a.T @ Mtilde @ b",
+    "route": [
+      "exact_discrete_reverse",
+      "certified_material_covector",
+      "control_interpolation_transpose",
+      "active_control_restriction",
+      "mtilde_solve",
+      "corrected_riesz_gradient"
+    ]
+  },
+  "historical_run_id": "fathi_s43_gpu_p40_np2_apow13p8155_pml6p25_t052",
+  "immutable_operator_assets": {
+    "classification": "HISTORICAL_CERTIFIED_ASSET_REUSE",
+    "manifest": "configs/fathi_s43_repro_p20_t052_immutable_assets.json",
+    "mutable": false,
+    "required_asset_ids": [
+      "exact_spatial_operator",
+      "real_s43_compact_topology",
+      "strict_full_grid_station_geometry"
+    ]
+  },
+  "material": {
+    "dataset": "samples",
+    "directory": "mat/h5",
+    "files": {
+      "density": "Mat_0_Density.h5",
+      "kappa": "Mat_0_Kappa.h5",
+      "mu": "Mat_0_Mu.h5"
+    }
+  },
+  "namespace": {
+    "accepted_subdir": "accepted",
+    "data_run_pattern": "data/reproduction/{run_id}",
+    "iteration_pattern": "iterations/{iteration_tag}",
+    "results_run_pattern": "results/{run_id}",
+    "state_pattern": "states/{iteration_tag}_state.npz",
+    "transition_pattern": "{transition_id}"
+  },
+  "optimizer": {
+    "curvature_formula": "s.T @ Mtilde @ y",
+    "curvature_relative_tolerance": 1e-12,
+    "fixed_reproduction_scaling": {
+      "J_ref": 3.789919983047143e-08,
+      "J_ref_iteration": 0,
+      "m_ref_pa": 80000000.0,
+      "provenance": "frozen certified external objective at reproduction initialization"
+    },
+    "lambda_bias": {
+      "equation": "paper Eq.25",
+      "iteration_source": "parent_iteration",
+      "norm": "Euclidean L2"
+    },
+    "memory_limit": 15,
+    "metric": "Mtilde",
+    "metric_inner_product": "a.T @ Mtilde @ b",
+    "normalization": "none"
+  },
+  "regularization_contract": {
+    "classification": "FATHI_TV_REGULARIZED_PARENT_FROZEN_WEIGHT_CONTRACT",
+    "config": "configs/fathi_s43_repro_tv_p20_t052_regularization.json",
+    "eq24_symbol": "beta",
+    "eq9_equivalent_mapping": "R_eq9 = 2*beta",
+    "gradient_rhs": "b_total = b_data + beta_lambda*b_tv_lambda + beta_mu*b_tv_mu",
+    "history_policy": "new run namespace; iter000 starts with empty L-BFGS history",
+    "scalar_objective": "J_total = J_data + beta_lambda*Q_lambda + beta_mu*Q_mu",
+    "weights_frozen_within_parent_line_search": true
+  },
+  "routes": {
+    "candidate_subdir": "candidates",
+    "control_transpose": "control_interpolation_transpose",
+    "exact_reverse": "exact_reverse",
+    "gradient_root": "corrected_gradient",
+    "line_search_root": "external_armijo",
+    "material_covector": "material_covector",
+    "mtilde_solve": "mtilde_solve",
+    "optimizer_history": "optimizer_history",
+    "optimizer_root": "physical_optimizer",
+    "optimizer_state_pattern": "{iteration_tag}_optimizer_state.json"
+  },
+  "run_id": "fathi_s43_repro_tv_p20_t052",
+  "schema_version": 1
+}
