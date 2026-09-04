@@ -7,6 +7,8 @@ import hashlib
 import json
 import os
 from pathlib import Path
+
+from scripts.fathi_benchmark.runtime_paths import runtime_resolve_path
 import re
 import shutil
 from typing import Any, Mapping, Sequence
@@ -59,7 +61,20 @@ def sha256_file(path: str | Path) -> str:
 
 def _resolve(repo: Path, value: str | Path) -> Path:
     path = Path(value).expanduser()
-    return path.resolve() if path.is_absolute() else (repo / path).resolve()
+
+    if path.is_absolute():
+        return path.resolve()
+
+    repository_candidate = (repo / path).resolve()
+
+    if repository_candidate.exists():
+        return repository_candidate
+
+    return runtime_resolve_path(
+        path,
+        repo_root=repo,
+        prefer_existing_legacy=False,
+    )
 
 
 def _artifact_path(
