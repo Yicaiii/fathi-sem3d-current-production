@@ -11,7 +11,14 @@ from scipy.sparse import load_npz
 from scipy.sparse.linalg import spsolve
 
 from scripts.fathi_benchmark.regularization.tv_q1 import assemble_smoothed_tv_q1
-from scripts.fathi_benchmark.regularization.tv_weight import fathi_eq24_weight
+from scripts.fathi_benchmark.regularization.tv_weight import (
+    EQ24_ACTIVE_STATUS,
+    EQ24_DEFERRED_FLAT_STATUS,
+    EQ24_FLAT_PARENT_POLICY_VERSION,
+    floating_sum_relative_bound,
+    fathi_eq24_weight_with_flat_parent_policy,
+    q1_constant_gradient_roundoff_bound_sq,
+)
 
 
 PA_PER_MPA = 1.0e6
@@ -92,6 +99,36 @@ def _varrho(reg: dict, stage: str) -> float:
     if not np.isfinite(value) or not (0.0 < value <= 1.0):
         raise RuntimeError("varrho must lie in (0, 1]")
     return value
+
+
+
+def _discrete_epsilon_floor(
+    x: np.ndarray,
+    y: np.ndarray,
+    z: np.ndarray,
+    epsilon_gradient_sq: float,
+) -> float:
+    """Discrete Q1/Gauss epsilon-floor on the current rectilinear grid."""
+
+    dx = np.diff(x)[None, None, :]
+    dy = np.diff(y)[None, :, None]
+    dz = np.diff(z)[:, None, None]
+    element_volume = dz * dy * dx
+    return float(np.sqrt(epsilon_gradient_sq) * np.sum(element_volume))
+
+
+def _gradient_roundoff_bound_sq(
+    field_mpa: np.ndarray,
+    x: np.ndarray,
+    y: np.ndarray,
+    z: np.ndarray,
+) -> float:
+    return q1_constant_gradient_roundoff_bound_sq(
+        max_abs_field_mpa=float(np.max(np.abs(field_mpa))),
+        min_dx_m=float(np.min(np.diff(x))),
+        min_dy_m=float(np.min(np.diff(y))),
+        min_dz_m=float(np.min(np.diff(z))),
+    )
 
 
 def main() -> None:
@@ -235,17 +272,74 @@ def main() -> None:
     if matrix.shape != (n_active, n_active):
         raise RuntimeError(f"Mtilde shape mismatch: {matrix.shape} != {(n_active, n_active)}")
 
-    weight_lambda = fathi_eq24_weight(rhs_data_lambda, tv_active_lambda_pa, varrho=varrho)
-    weight_mu = fathi_eq24_weight(rhs_data_mu, tv_active_mu_pa, varrho=varrho)
+    q_floor = _discrete_epsilon_floor(x, y, z, epsilon)
+    q_floor_tol_lambda = floating_sum_relative_bound(
+        tv_lambda.quadrature_evaluations
+    )
+    q_floor_tol_mu = floating_sum_relative_bound(
+        tv_mu.quadrature_evaluations
+    )
+
+    weight_lambda = fathi_eq24_weight_with_flat_parent_policy(
+        rhs_data_lambda,
+        tv_active_lambda_pa,
+        varrho=varrho,
+        max_gradient_sq=tv_lambda.max_gradient_sq,
+        epsilon_gradient_sq=epsilon,
+        gradient_roundoff_bound_sq=_gradient_roundoff_bound_sq(
+            lambda_pa / PA_PER_MPA,
+            x,
+            y,
+            z,
+        ),
+        q_value=tv_lambda.value,
+        q_floor_value=q_floor,
+        q_floor_relative_tolerance=q_floor_tol_lambda,
+    )
+    weight_mu = fathi_eq24_weight_with_flat_parent_policy(
+        rhs_data_mu,
+        tv_active_mu_pa,
+        varrho=varrho,
+        max_gradient_sq=tv_mu.max_gradient_sq,
+        epsilon_gradient_sq=epsilon,
+        gradient_roundoff_bound_sq=_gradient_roundoff_bound_sq(
+            mu_pa / PA_PER_MPA,
+            x,
+            y,
+            z,
+        ),
+        q_value=tv_mu.value,
+        q_floor_value=q_floor,
+        q_floor_relative_tolerance=q_floor_tol_mu,
+    )
 
     weighted_tv_lambda = weight_lambda.weight * tv_active_lambda_pa
     weighted_tv_mu = weight_mu.weight * tv_active_mu_pa
     ratio_lambda = float(np.linalg.norm(weighted_tv_lambda) / max(np.linalg.norm(rhs_data_lambda), 1.0e-300))
     ratio_mu = float(np.linalg.norm(weighted_tv_mu) / max(np.linalg.norm(rhs_data_mu), 1.0e-300))
-    if abs(ratio_lambda - varrho) > 1.0e-12:
-        raise RuntimeError("Eq.24 lambda norm-ratio contract failed")
-    if abs(ratio_mu - varrho) > 1.0e-12:
-        raise RuntimeError("Eq.24 mu norm-ratio contract failed")
+
+    for field, weight, ratio in (
+        ("lambda", weight_lambda, ratio_lambda),
+        ("mu", weight_mu, ratio_mu),
+    ):
+        if weight.status == EQ24_ACTIVE_STATUS:
+            if weight.gradient_gate_pass and weight.q_floor_gate_pass:
+                raise RuntimeError(
+                    f"Eq.24 {field} ACTIVE despite both flat-parent gates passing"
+                )
+            if weight.weight <= 0.0:
+                raise RuntimeError(f"Eq.24 {field} ACTIVE beta is not positive")
+            if abs(ratio - varrho) > 1.0e-12:
+                raise RuntimeError(f"Eq.24 {field} norm-ratio contract failed")
+        elif weight.status == EQ24_DEFERRED_FLAT_STATUS:
+            if not weight.gradient_gate_pass or not weight.q_floor_gate_pass:
+                raise RuntimeError(
+                    f"flat-parent {field} deferral lacks dual-gate evidence"
+                )
+            if weight.weight != 0.0 or ratio != 0.0:
+                raise RuntimeError(f"flat-parent {field} Eq.24 deferral is not exactly zero")
+        else:
+            raise RuntimeError(f"unsupported Eq.24 status for {field}: {weight.status}")
 
     # Zero-regularization regression: the canonical Mtilde solve must be reproduced
     # before any total-RHS solve is trusted.
@@ -299,6 +393,7 @@ def main() -> None:
         "schema_version": 1,
         "result": "PASS_FATHI_TV_GATE3_EQ21_CONTROL_ASSEMBLY",
         "classification": "AUDIT_ONLY_NO_FORWARD_NO_REVERSE_NO_OPTIMIZER",
+        "eq24_policy_version": EQ24_FLAT_PARENT_POLICY_VERSION,
         "frequency_stage": args.frequency_stage,
         "varrho": varrho,
         "material_coordinate_tv_kernel": "MPa",
@@ -324,16 +419,48 @@ def main() -> None:
             "formula": "beta = varrho * ||g_mis||_2 / ||g_reg||_2",
             "norm_space": "same pre-Mtilde active physical-Pa control covectors",
             "lambda": {
+                "status": weight_lambda.status,
                 "data_l2": weight_lambda.misfit_l2,
                 "regularization_l2": weight_lambda.regularization_l2,
                 "beta_eq21": weight_lambda.weight,
                 "weighted_reg_over_data_l2": ratio_lambda,
+                "max_gradient_sq": weight_lambda.max_gradient_sq,
+                "epsilon_gradient_sq": weight_lambda.epsilon_gradient_sq,
+                "max_gradient_sq_over_epsilon": weight_lambda.max_gradient_sq_over_epsilon,
+                "gradient_roundoff_bound_sq": weight_lambda.gradient_roundoff_bound_sq,
+                "gradient_roundoff_bound_sq_over_epsilon": weight_lambda.gradient_roundoff_bound_sq_over_epsilon,
+                "gradient_gate_pass": weight_lambda.gradient_gate_pass,
+                "gradient_gate_margin": weight_lambda.gradient_gate_margin,
+                "gradient_gate_margin_orders": weight_lambda.gradient_gate_margin_orders,
+                "Q": weight_lambda.q_value,
+                "Q_epsilon_floor": weight_lambda.q_floor_value,
+                "Q_floor_relative_error": weight_lambda.q_floor_relative_error,
+                "Q_floor_relative_tolerance": weight_lambda.q_floor_relative_tolerance,
+                "Q_floor_gate_pass": weight_lambda.q_floor_gate_pass,
+                "Q_floor_gate_margin": weight_lambda.q_floor_gate_margin,
+                "Q_floor_exact": weight_lambda.q_floor_exact,
             },
             "mu": {
+                "status": weight_mu.status,
                 "data_l2": weight_mu.misfit_l2,
                 "regularization_l2": weight_mu.regularization_l2,
                 "beta_eq21": weight_mu.weight,
                 "weighted_reg_over_data_l2": ratio_mu,
+                "max_gradient_sq": weight_mu.max_gradient_sq,
+                "epsilon_gradient_sq": weight_mu.epsilon_gradient_sq,
+                "max_gradient_sq_over_epsilon": weight_mu.max_gradient_sq_over_epsilon,
+                "gradient_roundoff_bound_sq": weight_mu.gradient_roundoff_bound_sq,
+                "gradient_roundoff_bound_sq_over_epsilon": weight_mu.gradient_roundoff_bound_sq_over_epsilon,
+                "gradient_gate_pass": weight_mu.gradient_gate_pass,
+                "gradient_gate_margin": weight_mu.gradient_gate_margin,
+                "gradient_gate_margin_orders": weight_mu.gradient_gate_margin_orders,
+                "Q": weight_mu.q_value,
+                "Q_epsilon_floor": weight_mu.q_floor_value,
+                "Q_floor_relative_error": weight_mu.q_floor_relative_error,
+                "Q_floor_relative_tolerance": weight_mu.q_floor_relative_tolerance,
+                "Q_floor_gate_pass": weight_mu.q_floor_gate_pass,
+                "Q_floor_gate_margin": weight_mu.q_floor_gate_margin,
+                "Q_floor_exact": weight_mu.q_floor_exact,
             },
         },
         "mtilde": {

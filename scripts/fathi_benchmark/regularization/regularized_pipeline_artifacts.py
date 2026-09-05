@@ -41,6 +41,13 @@ from scripts.fathi_benchmark.external_armijo import (
     armijo_decision,
 )
 from scripts.fathi_benchmark.iteration_context import IterationPaths
+from scripts.fathi_benchmark.regularization.tv_weight import (
+    EQ24_ACTIVE_STATUS,
+    EQ24_DEFERRED_FLAT_STATUS,
+    EQ24_FLAT_PARENT_POLICY_VERSION,
+    SECANT_PAIR_CURVATURE_POLICY_VERSION,
+    evaluate_secant_pair_curvature,
+)
 
 
 REGULARIZED_EQ21_RESULT = "PASS_FATHI_TV_GATE3_EQ21_CONTROL_ASSEMBLY"
@@ -93,8 +100,8 @@ def compose_frozen_regularized_objective(
         raise ValueError("regularized objective inputs must be finite")
     if data_objective < 0.0 or q_lambda < 0.0 or q_mu < 0.0:
         raise ValueError("objective/TV values must be non-negative")
-    if beta_lambda <= 0.0 or beta_mu <= 0.0:
-        raise ValueError("Eq.24 beta weights must be positive")
+    if beta_lambda < 0.0 or beta_mu < 0.0:
+        raise ValueError("effective Eq.24 beta weights must be non-negative")
 
     j_reg_lambda = float(beta_lambda * q_lambda)
     j_reg_mu = float(beta_mu * q_mu)
@@ -111,6 +118,71 @@ def compose_frozen_regularized_objective(
         "J_reg": j_reg,
         "J_total": j_total,
     }
+
+
+
+def require_eq24_status_beta_contract(
+    eq21: Mapping[str, Any],
+) -> dict[str, str]:
+    """Second-line validation of Eq24 status, beta, and flatness evidence."""
+
+    if eq21.get("eq24_policy_version") != EQ24_FLAT_PARENT_POLICY_VERSION:
+        raise ValueError("Eq.24 policy version mismatch")
+
+    varrho = float(eq21["varrho"])
+    statuses: dict[str, str] = {}
+    for field in ("lambda", "mu"):
+        rec = eq21["eq24"][field]
+        status = str(rec.get("status"))
+        beta = float(rec["beta_eq21"])
+        ratio = float(rec["weighted_reg_over_data_l2"])
+        grad_gate = bool(rec.get("gradient_gate_pass"))
+        q_gate = bool(rec.get("Q_floor_gate_pass"))
+
+        if status == EQ24_DEFERRED_FLAT_STATUS:
+            if not (grad_gate and q_gate):
+                raise ValueError(
+                    f"{field} deferred Eq.24 lacks dual flat-parent gates"
+                )
+            if beta != 0.0 or ratio != 0.0:
+                raise ValueError(
+                    f"{field} deferred Eq.24 must have beta=ratio=0"
+                )
+        elif status == EQ24_ACTIVE_STATUS:
+            if grad_gate and q_gate:
+                raise ValueError(
+                    f"{field} active Eq.24 conflicts with dual flat-parent gates"
+                )
+            if beta <= 0.0:
+                raise ValueError(f"{field} active Eq.24 beta must be positive")
+            if abs(ratio - varrho) > 1.0e-12:
+                raise ValueError(
+                    f"{field} active Eq.24 norm ratio differs from varrho"
+                )
+        else:
+            raise ValueError(f"unsupported Eq.24 status for {field}: {status}")
+        statuses[field] = status
+
+    return statuses
+
+
+def regularized_secant_pair_outcome(
+    s: np.ndarray,
+    y: np.ndarray,
+) -> dict[str, Any]:
+    """Durable history outcome: use iff s^T y > 0, otherwise explicit skip."""
+
+    outcome = evaluate_secant_pair_curvature(s, y)
+    return {
+        "policy_version": outcome.policy_version,
+        "s_dot_y": outcome.s_dot_y,
+        "s_l2": outcome.s_l2,
+        "y_l2": outcome.y_l2,
+        "normalized_curvature": outcome.normalized_curvature,
+        "use_in_lbfgs_history": outcome.use_in_lbfgs_history,
+        "status": outcome.status,
+    }
+
 
 
 
@@ -185,6 +257,7 @@ def register_regularized_gradient(
     eq21 = _json(eq21_summary_path)
     if eq21.get("result") != REGULARIZED_EQ21_RESULT:
         raise RuntimeError("Eq.21 regularized assembly is not PASS")
+    eq24_statuses = require_eq24_status_beta_contract(eq21)
 
     parent_summary_path = paths.parent_accepted / "accepted_summary.json"
     parent_summary = _json(parent_summary_path)
@@ -300,6 +373,10 @@ def register_regularized_gradient(
                 "J_reg = beta_lambda*Q_lambda + beta_mu*Q_mu"
             ),
             "eq9_equivalent_mapping": "R_eq9 = 2*beta",
+            "eq24_policy_version": eq21["eq24_policy_version"],
+            "eq24_lambda_status": eq24_statuses["lambda"],
+            "eq24_mu_status": eq24_statuses["mu"],
+            "next_secant_pair_policy": SECANT_PAIR_CURVATURE_POLICY_VERSION,
         },
         "registration_signature_sha256": canonical_sha256(
             signature_payload
@@ -329,6 +406,7 @@ def persist_parent_regularized_objective(
     eq21 = _json(eq21_summary_path)
     if eq21.get("result") != REGULARIZED_EQ21_RESULT:
         raise RuntimeError("Eq.21 regularized assembly is not PASS")
+    eq24_statuses = require_eq24_status_beta_contract(eq21)
 
     accepted_path = paths.parent_accepted / "accepted_summary.json"
     accepted = _json(accepted_path)
@@ -369,6 +447,10 @@ def persist_parent_regularized_objective(
             "b_total = b_data + beta_lambda*b_tv_lambda + beta_mu*b_tv_mu"
         ),
         "eq9_equivalent_mapping": "R_eq9 = 2*beta",
+        "eq24_policy_version": eq21["eq24_policy_version"],
+        "eq24_lambda_status": eq24_statuses["lambda"],
+        "eq24_mu_status": eq24_statuses["mu"],
+        "next_secant_pair_policy": SECANT_PAIR_CURVATURE_POLICY_VERSION,
         "accepted_parent_summary": artifact_record(
             accepted_path, repo=root
         ),

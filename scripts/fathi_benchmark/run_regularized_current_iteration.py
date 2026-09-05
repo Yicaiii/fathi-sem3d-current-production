@@ -37,6 +37,10 @@ from scripts.fathi_benchmark.regularization.regularized_pipeline_artifacts impor
     promote_regularized_accepted_trial,
     register_regularized_gradient,
 )
+from scripts.fathi_benchmark.regularization.tv_weight import (
+    EQ24_FLAT_PARENT_POLICY_VERSION,
+    SECANT_PAIR_CURVATURE_POLICY_VERSION,
+)
 from scripts.fathi_benchmark.runtime_paths import (
     iteration_runtime_paths,
     resolve_path,
@@ -260,6 +264,8 @@ def main() -> None:
         "reference_manifest": str(reference_path),
         "accepted_parent": str(accepted_parent),
         "optimizer_history_empty": True,
+        "eq24_flat_parent_policy": EQ24_FLAT_PARENT_POLICY_VERSION,
+        "secant_pair_curvature_policy": SECANT_PAIR_CURVATURE_POLICY_VERSION,
         "numerical_runs": {
             "sem3d": 0,
             "external_forward": 0,
@@ -389,6 +395,8 @@ def main() -> None:
         eq21_summary.is_file()
         and _json(eq21_summary).get("result")
         == "PASS_FATHI_TV_GATE3_EQ21_CONTROL_ASSEMBLY"
+        and _json(eq21_summary).get("eq24_policy_version")
+        == EQ24_FLAT_PARENT_POLICY_VERSION
     ):
         _run(
             [
@@ -440,7 +448,16 @@ def main() -> None:
         / f"iter_{parent:03d}_lbfgs_eq25_direction"
         / "direction_summary.json"
     )
+    direction_reusable = False
     if _pass(direction_summary, optimizer_direction_result(parent)):
+        existing_direction = _json(direction_summary)
+        direction_reusable = (
+            existing_direction.get("registered_gradient_manifest")
+            == artifact_record(registered, repo=repo)
+            and existing_direction.get("accepted_parent_summary")
+            == artifact_record(accepted_parent, repo=repo)
+        )
+    if direction_reusable:
         print(f"DIRECTION = REUSE {direction_summary}")
     else:
         direction_request = {
