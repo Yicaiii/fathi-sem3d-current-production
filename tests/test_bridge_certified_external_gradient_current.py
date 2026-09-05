@@ -78,8 +78,29 @@ class CurrentBridgeContractFixture:
         }
         self.config_path = self.repo / "configs" / "runtime.json"
         self.engine_path = self.repo / "configs" / "engine.json"
+        self.driver_config_path = (
+            self.repo / "historical_configs" / "runtime.json"
+        )
         _write_json(self.config_path, self.config)
         _write_json(self.engine_path, self.engine)
+        _write_json(
+            self.driver_config_path,
+            {
+                "benchmark_name": "historical_test_run",
+                "forward_operator": {"expected_sample_count": 1040},
+                "certified_driver_only": True,
+            },
+        )
+        self.certified_reference = {
+            "immutable_input_assets": {
+                "runtime_config": str(
+                    self.driver_config_path.relative_to(self.repo)
+                ),
+                "runtime_config_sha256": _sha256(
+                    self.driver_config_path
+                ),
+            }
+        }
         self.paths = build_iteration_paths(
             self.engine,
             self.iteration,
@@ -197,7 +218,7 @@ class CurrentBridgeContractFixture:
                 "accepted_external_receiver": _record(self.current_trace),
                 "true_external_receiver": _record(self.true_trace),
                 "driver_assets": {
-                    "config": _record(self.config_path),
+                    "config": _record(self.driver_config_path),
                     "gll": _record(self.gll),
                     "weights": _record(self.weights),
                     "topology": {
@@ -224,6 +245,8 @@ class CurrentBridgeContractFixture:
             "topology_dir": self.topology_dir,
             "operator_content_signature": self.operator_signature,
             "topology_content_signature": self.topology_signature,
+            "runtime_root": self.repo,
+            "certified_reference": self.certified_reference,
         }
         arguments.update(overrides)
         return bridge.validate_current_reverse_contract(**arguments)
@@ -514,6 +537,36 @@ class CurrentBridgeContractTest(unittest.TestCase):
                 "bootstrap primal/current receiver",
             ):
                 fixture.validate()
+
+
+    def test_22_distinct_current_and_certified_driver_configs_are_valid(self):
+        self.assertNotEqual(
+            _sha256(self.fixture.config_path),
+            _sha256(self.fixture.driver_config_path),
+        )
+        result = self.fixture.validate()
+        self.assertEqual(
+            result["certified_driver_runtime_config"],
+            self.fixture.driver_config_path.resolve(),
+        )
+
+    def test_23_driver_config_must_match_certified_reference_hash(self):
+        reference = copy.deepcopy(self.fixture.certified_reference)
+        reference["immutable_input_assets"]["runtime_config_sha256"] = "0" * 64
+        with self.assertRaisesRegex(
+            RuntimeError,
+            "SHA-256 differs from certified reference",
+        ):
+            self.fixture.validate(certified_reference=reference)
+
+    def test_24_driver_config_must_match_certified_reference_path(self):
+        reference = copy.deepcopy(self.fixture.certified_reference)
+        reference["immutable_input_assets"]["runtime_config"] = "configs/runtime.json"
+        with self.assertRaisesRegex(
+            RuntimeError,
+            "path differs from certified reference",
+        ):
+            self.fixture.validate(certified_reference=reference)
 
 
 if __name__ == "__main__":

@@ -163,6 +163,48 @@ def _asset_paths(
     return result
 
 
+
+def validate_certified_driver_runtime_config(
+    *,
+    repo: Path,
+    runtime_root: Path,
+    record: Mapping[str, Any],
+    certified_reference: Mapping[str, Any],
+) -> Path:
+    """Validate the frozen historical driver config against the certified reference."""
+
+    path = _verify_file_record(
+        repo,
+        record,
+        label="reverse driver runtime config",
+    )
+
+    immutable = certified_reference.get("immutable_input_assets", {})
+    reference_value = immutable.get("runtime_config")
+    reference_sha = str(immutable.get("runtime_config_sha256", ""))
+
+    if not reference_value or not reference_sha:
+        raise RuntimeError(
+            "certified reference lacks immutable runtime-config provenance"
+        )
+
+    expected_path = resolve_path(
+        str(reference_value),
+        base=runtime_root,
+    )
+    if path != expected_path:
+        raise RuntimeError(
+            "reverse driver runtime config path differs from certified reference"
+        )
+
+    if sha256_file(path) != reference_sha:
+        raise RuntimeError(
+            "reverse driver runtime config SHA-256 differs from certified reference"
+        )
+
+    return path
+
+
 def validate_current_reverse_contract(
     *,
     repo: Path,
@@ -178,6 +220,8 @@ def validate_current_reverse_contract(
     topology_dir: Path,
     operator_content_signature: str,
     topology_content_signature: str,
+    runtime_root: Path,
+    certified_reference: Mapping[str, Any],
 ) -> dict[str, Any]:
     """Validate only the CURRENT reverse-to-bridge interface and provenance."""
 
@@ -267,12 +311,11 @@ def validate_current_reverse_contract(
         expected_path=engine_path,
     )
     driver_assets = input_hashes.get("driver_assets", {})
-    _verify_file_record(
-        repo,
-        driver_assets.get("config", {}),
-        label="reverse driver runtime config",
-        expected_path=config_path,
-        allow_equivalent_path=True,
+    certified_driver_config = validate_certified_driver_runtime_config(
+        repo=repo,
+        runtime_root=runtime_root,
+        record=driver_assets.get("config", {}),
+        certified_reference=certified_reference,
     )
 
     accepted_summary = (paths.parent_accepted / "accepted_summary.json").resolve()
@@ -410,6 +453,10 @@ def validate_current_reverse_contract(
         "registered_physical_gradient": paths.mtilde_solve.resolve(),
         "operator_content_signature_sha256": operator_content_signature,
         "topology_content_signature_sha256": topology_content_signature,
+        "certified_driver_runtime_config": certified_driver_config,
+        "certified_driver_runtime_config_sha256": sha256_file(
+            certified_driver_config
+        ),
     }
 
 
@@ -564,6 +611,7 @@ def main() -> None:
         if args.reference_manifest
         else repo / "results" / run / "certified_external_reference.json"
     ).resolve()
+    certified_reference = _read_json(legacy_reference_path)
     reverse_dir = (
         resolve_path(args.reverse_dir, base=repo)
         if args.reverse_dir
@@ -622,6 +670,8 @@ def main() -> None:
                     "content_signature_sha256"
                 ]
             ),
+            runtime_root=Path(runtime["runtime_root"]).resolve(),
+            certified_reference=certified_reference,
         )
         if out_dir != paths.gradient_root.resolve():
             raise RuntimeError("CURRENT optimizer bridge output is not canonical")
@@ -1064,6 +1114,12 @@ def main() -> None:
                     ],
                     "topology_content_signature_sha256": current_contract[
                         "topology_content_signature_sha256"
+                    ],
+                    "certified_driver_runtime_config": str(
+                        current_contract["certified_driver_runtime_config"]
+                    ),
+                    "certified_driver_runtime_config_sha256": current_contract[
+                        "certified_driver_runtime_config_sha256"
                     ],
                 }
             ),

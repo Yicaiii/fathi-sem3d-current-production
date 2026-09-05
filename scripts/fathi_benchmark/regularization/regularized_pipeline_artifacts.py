@@ -113,6 +113,65 @@ def compose_frozen_regularized_objective(
     }
 
 
+
+BOOTSTRAP_PARENT_CLASSIFICATION = (
+    "REGULARIZED_ITER000_BOOTSTRAP_FROM_CERTIFIED_BASELINE_MATERIAL"
+)
+
+
+def require_regularized_parent_identity(
+    manifest: Mapping[str, Any],
+    paths: IterationPaths,
+    *,
+    label: str,
+) -> str:
+    """Validate either a promoted transition identity or the certified iter000 bootstrap."""
+
+    identity_fields = ("parent_iteration", "child_iteration", "transition")
+    present = [field in manifest for field in identity_fields]
+
+    if all(present):
+        require_identity(manifest, paths, label=label)
+        return "TRANSITION_IDENTITY"
+
+    if any(present):
+        raise ValueError(
+            f"{label} has partial transition identity; bootstrap summaries "
+            "must omit all transition fields"
+        )
+
+    if paths.identity.parent_iteration != 0:
+        raise ValueError(
+            f"{label} lacks transition identity outside iter000 bootstrap"
+        )
+
+    if manifest.get("run_id") != paths.identity.run_id:
+        raise ValueError(f"{label} bootstrap run_id mismatch")
+
+    run_alias = manifest.get("run")
+    if run_alias is not None and run_alias != paths.identity.run_id:
+        raise ValueError(f"{label} bootstrap run alias mismatch")
+
+    if int(manifest.get("iter", -1)) != 0:
+        raise ValueError(f"{label} bootstrap iter mismatch")
+
+    lineage = manifest.get("lineage")
+    if not isinstance(lineage, Mapping):
+        raise ValueError(f"{label} bootstrap lineage missing")
+
+    if lineage.get("classification") != BOOTSTRAP_PARENT_CLASSIFICATION:
+        raise ValueError(f"{label} bootstrap lineage classification mismatch")
+
+    if lineage.get("optimizer_history_reused") is not False:
+        raise ValueError(f"{label} bootstrap optimizer-history provenance mismatch")
+
+    material_sha = manifest.get("material_sha256")
+    if not isinstance(material_sha, Mapping) or not material_sha:
+        raise ValueError(f"{label} bootstrap material SHA provenance missing")
+
+    return "CERTIFIED_ITER000_BOOTSTRAP_IDENTITY"
+
+
 def register_regularized_gradient(
     *,
     repo: str | Path,
@@ -134,7 +193,11 @@ def register_regularized_gradient(
         accepted_model_result(parent),
         label="regularized accepted parent",
     )
-    require_identity(parent_summary, paths, label="regularized accepted parent")
+    parent_identity_mode = require_regularized_parent_identity(
+        parent_summary,
+        paths,
+        label="regularized accepted parent",
+    )
 
     bridge_summary_path = paths.gradient_root / "summary.json"
     reverse_summary_path = (
@@ -174,6 +237,7 @@ def register_regularized_gradient(
         "parent_iteration": parent,
         "child_iteration": paths.identity.child_iteration,
         "transition": paths.identity.transition_id,
+        "parent_identity_mode": parent_identity_mode,
         "parent_summary": artifact_record(parent_summary_path, repo=root),
         "bridge_summary": artifact_record(bridge_summary_path, repo=root),
         "reverse_summary": artifact_record(reverse_summary_path, repo=root),
@@ -207,6 +271,7 @@ def register_regularized_gradient(
         "parent_accepted_model": {
             "summary": artifact_record(parent_summary_path, repo=root),
             "result": accepted_model_result(parent),
+            "identity_mode": parent_identity_mode,
             "material_sha256": dict(material_sha),
         },
         "source_bridge_summary": artifact_record(
@@ -267,6 +332,16 @@ def persist_parent_regularized_objective(
 
     accepted_path = paths.parent_accepted / "accepted_summary.json"
     accepted = _json(accepted_path)
+    require_result(
+        accepted,
+        accepted_model_result(paths.identity.parent_iteration),
+        label="regularized objective accepted parent",
+    )
+    parent_identity_mode = require_regularized_parent_identity(
+        accepted,
+        paths,
+        label="regularized objective accepted parent",
+    )
     data_objective = float(accepted["objective"]["accepted"])
 
     values = compose_frozen_regularized_objective(
@@ -286,6 +361,7 @@ def persist_parent_regularized_objective(
         "transition": paths.identity.transition_id,
         **values,
         "weights_frozen_within_line_search": True,
+        "accepted_parent_identity_mode": parent_identity_mode,
         "scalar_convention": (
             "J_total = J_data + beta_lambda*Q_lambda + beta_mu*Q_mu"
         ),
