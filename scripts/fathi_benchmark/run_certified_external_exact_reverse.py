@@ -404,6 +404,19 @@ def prepare_replay(runtime, replay_stride: int) -> None:
     print(json.dumps(result, indent=2))
 
 
+def runtime_objective_dt(runtime) -> float:
+    """Return the quadrature dt actually used to define J_data."""
+    return float(runtime.get("objective_dt", runtime["driver"].dt))
+
+
+def runtime_objective_dt_source(runtime) -> str:
+    return (
+        "certified_reference.contract.dt"
+        if "objective_dt" in runtime
+        else "driver.dt"
+    )
+
+
 def finalize(runtime, reverse_state, elapsed: float, replay_audit: dict) -> None:
     gradients = reverse_state["gradients"]
     for name, value in gradients.items():
@@ -496,7 +509,9 @@ def finalize(runtime, reverse_state, elapsed: float, replay_audit: dict) -> None
             "sample_count": sample_count,
             "receiver_count": int(runtime["residual"].shape[1]),
             "component_count": int(runtime["residual"].shape[2]),
-            "dt": runtime["driver"].dt,
+            "dt": runtime_objective_dt(runtime),
+            "driver_dt": float(runtime["driver"].dt),
+            "dt_source": runtime_objective_dt_source(runtime),
         },
         "reverse": {
             "steps": int(reverse_state["reverse_steps"]),
