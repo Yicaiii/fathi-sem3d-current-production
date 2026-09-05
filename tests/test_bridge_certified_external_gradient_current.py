@@ -35,10 +35,10 @@ def _write_json(path: Path, value: dict) -> None:
 
 
 class CurrentBridgeContractFixture:
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, *, iteration: int = 1) -> None:
         self.repo = root.resolve()
         self.run_id = "current_test_run"
-        self.iteration = 1
+        self.iteration = int(iteration)
         self.config = {
             "benchmark_name": self.run_id,
             "forward_operator": {"expected_sample_count": 1040},
@@ -108,7 +108,7 @@ class CurrentBridgeContractFixture:
                 )
             self.material_paths[component] = path
         self.accepted_summary = self.paths.parent_accepted / "accepted_summary.json"
-        _write_json(self.accepted_summary, {"result": "PASS", "iter": 1})
+        _write_json(self.accepted_summary, {"result": "PASS", "iter": self.iteration})
 
         self.primal_root = self.paths.exact_reverse / "primal_forward"
         self.current_trace = self.primal_root / "current_external_receiver.npy"
@@ -133,11 +133,11 @@ class CurrentBridgeContractFixture:
         )
         self.primal_path = self.primal_root / "summary.json"
         self.primal = {
-            "result": "PASS_ITER001_ACCEPTED_EXTERNAL_PRIMAL_FOR_G1",
+            "result": bridge.retained_primal_result(self.iteration),
             "run_id": self.run_id,
-            "parent_iteration": 1,
-            "child_iteration": 2,
-            "transition": "iter_001_to_iter_002",
+            "parent_iteration": self.iteration,
+            "child_iteration": self.iteration + 1,
+            "transition": self.paths.identity.transition_id,
             "material_dir": str(self.material_dir),
             "material_sha256": {
                 key: _sha256(path) for key, path in self.material_paths.items()
@@ -436,6 +436,84 @@ class CurrentBridgeContractTest(unittest.TestCase):
         self.assertNotIn("Mat_0_Mu.h5", source)
         self.assertNotIn('"mat/h5"', source)
         self.assertNotIn('config["material_grid"]["dataset"]', source)
+
+    def test_20_bootstrap_iter000_uses_certified_primal_not_promoted_hash_fields(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = CurrentBridgeContractFixture(
+                Path(temporary),
+                iteration=0,
+            )
+            accepted = json.loads(
+                fixture.accepted_summary.read_text(encoding="utf-8")
+            )
+            accepted.pop("external_receiver_sha256", None)
+            accepted.pop("true_external_sha256", None)
+            accepted["objective"] = {"accepted": 1.25}
+            _write_json(fixture.accepted_summary, accepted)
+
+            primal = json.loads(
+                fixture.primal_path.read_text(encoding="utf-8")
+            )
+            primal["current_external_receiver"][
+                "bitwise_equal_to_accepted_parent"
+            ] = True
+            primal["certified_parent_receiver_reference"] = {
+                "sha256": _sha256(fixture.current_trace),
+            }
+            primal["objective"] = {"accepted_J": 1.25}
+            _write_json(fixture.primal_path, primal)
+
+            fixture.summary["input_hashes"][
+                "accepted_parent_summary"
+            ] = _record(fixture.accepted_summary)
+            fixture.summary["input_hashes"][
+                "primal_forward_summary"
+            ] = _record(fixture.primal_path)
+
+            result = fixture.validate()
+            self.assertEqual(
+                result["result_contract"],
+                "PASS_ITER000_EXACT_REVERSE_MATERIAL_COVECTOR",
+            )
+
+    def test_21_bootstrap_iter000_rejects_missing_certified_parent_receiver_gate(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = CurrentBridgeContractFixture(
+                Path(temporary),
+                iteration=0,
+            )
+            accepted = json.loads(
+                fixture.accepted_summary.read_text(encoding="utf-8")
+            )
+            accepted.pop("external_receiver_sha256", None)
+            accepted.pop("true_external_sha256", None)
+            accepted["objective"] = {"accepted": 1.25}
+            _write_json(fixture.accepted_summary, accepted)
+
+            primal = json.loads(
+                fixture.primal_path.read_text(encoding="utf-8")
+            )
+            primal["current_external_receiver"][
+                "bitwise_equal_to_accepted_parent"
+            ] = False
+            primal["certified_parent_receiver_reference"] = {
+                "sha256": _sha256(fixture.current_trace),
+            }
+            primal["objective"] = {"accepted_J": 1.25}
+            _write_json(fixture.primal_path, primal)
+
+            fixture.summary["input_hashes"][
+                "accepted_parent_summary"
+            ] = _record(fixture.accepted_summary)
+            fixture.summary["input_hashes"][
+                "primal_forward_summary"
+            ] = _record(fixture.primal_path)
+
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "bootstrap primal/current receiver",
+            ):
+                fixture.validate()
 
 
 if __name__ == "__main__":

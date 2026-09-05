@@ -126,6 +126,37 @@ class ExactReverseGradientGenericTest(unittest.TestCase):
         ):
             self.assertIn(field, source)
 
+    def test_bootstrap_parent_does_not_require_predecessor_armijo_trial(self):
+        source = inspect.getsource(generic.build_runtime)
+        self.assertIn(
+            "bootstrap_parent = args.iter_k == 0 and trial is None",
+            source,
+        )
+        self.assertIn(
+            'input_hashes["accepted_trial_summary"] = _file(trial_path)',
+            source,
+        )
+        self.assertIn(
+            '"BOOTSTRAP_CERTIFIED_PRIMAL_PARENT"',
+            source,
+        )
+        self.assertNotIn(
+            'accepted["external_armijo_trial"]',
+            source,
+        )
+
+    def test_reverse_replays_certified_objective_dt_not_raw_driver_dt(self):
+        source = inspect.getsource(generic.build_runtime)
+        self.assertIn("certified_data_objective(", source)
+        self.assertIn(
+            'certified_objective_dt = float(reference["contract"]["dt"])',
+            source,
+        )
+        self.assertNotIn(
+            "objective_dt == float(driver.dt)",
+            source,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

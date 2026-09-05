@@ -322,21 +322,47 @@ def validate_current_reverse_contract(
         label="current external receiver",
         expected_path=canonical_current,
     )
+    bootstrap_parent = int(iteration) == 0
     primal_current = primal.get("current_external_receiver", {})
+    current_sha = sha256_file(canonical_current)
     if (
         _manifest_path(repo, primal_current.get("path")) != canonical_current
-        or sha256_file(canonical_current) != str(primal_current.get("sha256", ""))
-        or sha256_file(canonical_current)
-        != str(accepted.get("external_receiver_sha256", ""))
+        or current_sha != str(primal_current.get("sha256", ""))
     ):
         raise RuntimeError("primal/current external receiver provenance mismatch")
+
+    if bootstrap_parent:
+        certified_parent_receiver = primal.get(
+            "certified_parent_receiver_reference", {}
+        )
+        if (
+            primal_current.get("bitwise_equal_to_accepted_parent") is not True
+            or current_sha != str(certified_parent_receiver.get("sha256", ""))
+        ):
+            raise RuntimeError(
+                "bootstrap primal/current receiver is not certified to the accepted parent"
+            )
+        accepted_objective = accepted.get("objective", {}).get("accepted")
+        primal_accepted_objective = primal.get("objective", {}).get("accepted_J")
+        if (
+            accepted_objective is None
+            or primal_accepted_objective is None
+            or float(accepted_objective) != float(primal_accepted_objective)
+        ):
+            raise RuntimeError(
+                "bootstrap accepted/primal data-objective provenance mismatch"
+            )
+    elif current_sha != str(accepted.get("external_receiver_sha256", "")):
+        raise RuntimeError("primal/current external receiver provenance mismatch")
+
     accepted_trace = _verify_file_record(
         repo,
         input_hashes.get("accepted_external_receiver", {}),
         label="accepted external receiver",
     )
-    if sha256_file(accepted_trace) != sha256_file(canonical_current):
+    if sha256_file(accepted_trace) != current_sha:
         raise RuntimeError("current receiver is not the accepted external receiver")
+
     true_record = input_hashes.get("true_external_receiver", {})
     true_path = _verify_file_record(
         repo, true_record, label="true external receiver"
@@ -345,7 +371,11 @@ def validate_current_reverse_contract(
     if (
         _manifest_path(repo, primal_true.get("path")) != true_path
         or str(primal_true.get("sha256", "")) != str(true_record.get("sha256", ""))
-        or str(true_record.get("sha256", ""))
+    ):
+        raise RuntimeError("primal/TRUE external receiver provenance mismatch")
+    if (
+        not bootstrap_parent
+        and str(true_record.get("sha256", ""))
         != str(accepted.get("true_external_sha256", ""))
     ):
         raise RuntimeError("primal/TRUE external receiver provenance mismatch")

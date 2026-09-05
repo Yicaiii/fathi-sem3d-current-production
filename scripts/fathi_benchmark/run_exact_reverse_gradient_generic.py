@@ -44,6 +44,10 @@ from scripts.fathi_benchmark.current_pipeline_contracts import (
     exact_reverse_result,
     retained_primal_result,
 )
+from scripts.fathi_benchmark.certified_data_objective import (
+    certified_data_objective,
+    float64_bits,
+)
 
 
 GRADIENT_NAMES = (
@@ -299,29 +303,45 @@ def build_runtime(args: argparse.Namespace) -> dict[str, Any]:
         "accepted parent result contract mismatch",
     )
     trial_record = accepted.get("candidate_objective_trial")
-    trial_path = (
-        _recorded_path(repo, trial_record["path"])
-        if isinstance(trial_record, Mapping)
-        else _recorded_path(repo, accepted["external_armijo_trial"])
-    )
-    trial = _json(trial_path)
-    _require(trial.get("accepted") is True, "Armijo trial is not accepted")
-    if args.iter_k > 0:
-        prior = iteration_runtime_paths(config, args.iter_k - 1, repo_root=repo)
-        _require(
-            _below(trial_path, Path(prior["transition_root"])),
-            "accepted trial is outside predecessor transition",
+    legacy_trial = accepted.get("external_armijo_trial")
+    trial_path: Path | None = None
+    trial: dict[str, Any] | None = None
+    if isinstance(trial_record, Mapping):
+        trial_path = _recorded_path(repo, trial_record["path"])
+    elif legacy_trial:
+        trial_path = _recorded_path(repo, legacy_trial)
+    elif args.iter_k > 0:
+        raise RuntimeError(
+            "promoted accepted parent lacks predecessor Armijo trial provenance"
         )
+
+    if trial_path is not None:
+        trial = _json(trial_path)
+        _require(trial.get("accepted") is True, "Armijo trial is not accepted")
+        if args.iter_k > 0:
+            prior = iteration_runtime_paths(config, args.iter_k - 1, repo_root=repo)
+            _require(
+                _below(trial_path, Path(prior["transition_root"])),
+                "accepted trial is outside predecessor transition",
+            )
+
+    bootstrap_parent = args.iter_k == 0 and trial is None
+    parent_provenance = (
+        "BOOTSTRAP_CERTIFIED_PRIMAL_PARENT"
+        if bootstrap_parent
+        else "PROMOTED_ARMIJO_PARENT"
+    )
+
     accepted_receiver = accepted.get("accepted_external_receiver")
-    accepted_trace = (
-        _resolve(repo, args.accepted_trace)
-        if args.accepted_trace
-        else (
-            _recorded_path(repo, accepted_receiver["path"])
-            if isinstance(accepted_receiver, Mapping)
-            else _recorded_path(repo, trial["candidate_external_receiver"])
-        )
-    )
+    if args.accepted_trace:
+        accepted_trace = _resolve(repo, args.accepted_trace)
+    elif bootstrap_parent:
+        accepted_trace = current_path
+    elif isinstance(accepted_receiver, Mapping):
+        accepted_trace = _recorded_path(repo, accepted_receiver["path"])
+    else:
+        _require(trial is not None, "accepted trial provenance is unavailable")
+        accepted_trace = _recorded_path(repo, trial["candidate_external_receiver"])
 
     material_dir = paths.parent_accepted / "mat" / "h5"
     material_files = {
@@ -359,6 +379,8 @@ def build_runtime(args: argparse.Namespace) -> dict[str, Any]:
             sha256_file(reference_path) == str(recorded_reference_sha),
             "certified reference differs from retained primal",
         )
+    reference = _json(reference_path)
+    certified_objective_dt = float(reference["contract"]["dt"])
 
     if args.driver_root:
         # Explicit compatibility override for archived/current-T052 certification
@@ -418,28 +440,44 @@ def build_runtime(args: argparse.Namespace) -> dict[str, Any]:
         is True,
         "primal summary accepted-trace bitwise gate is false",
     )
-    _require(
-        current_hash == accepted_hash
-        == str(accepted["external_receiver_sha256"])
-        == str(
-            trial.get(
-                "candidate_external_sha256",
-                trial.get("candidate_receiver", {}).get("sha256", ""),
-            )
-        ),
-        "current trace is not bitwise equal to accepted trace",
-    )
-    _require(
-        true_hash == str(primal["true_external_receiver"]["sha256"])
-        == str(accepted["true_external_sha256"])
-        == str(
-            trial.get(
-                "true_external_sha256",
-                trial.get("true_receiver", {}).get("sha256", ""),
-            )
-        ),
-        "TRUE trace hash differs from frozen provenance",
-    )
+    if bootstrap_parent:
+        certified_parent_receiver = primal.get(
+            "certified_parent_receiver_reference", {}
+        )
+        _require(
+            current_hash == accepted_hash
+            == str(certified_parent_receiver.get("sha256", "")),
+            "bootstrap current trace differs from certified parent receiver",
+        )
+        _require(
+            true_hash == str(primal["true_external_receiver"]["sha256"])
+            == str(reference["hashes"]["true_external_sha256"]),
+            "bootstrap TRUE trace differs from certified reference",
+        )
+    else:
+        _require(trial is not None, "promoted parent trial provenance is unavailable")
+        _require(
+            current_hash == accepted_hash
+            == str(accepted["external_receiver_sha256"])
+            == str(
+                trial.get(
+                    "candidate_external_sha256",
+                    trial.get("candidate_receiver", {}).get("sha256", ""),
+                )
+            ),
+            "current trace is not bitwise equal to accepted trace",
+        )
+        _require(
+            true_hash == str(primal["true_external_receiver"]["sha256"])
+            == str(accepted["true_external_sha256"])
+            == str(
+                trial.get(
+                    "true_external_sha256",
+                    trial.get("true_receiver", {}).get("sha256", ""),
+                )
+            ),
+            "TRUE trace hash differs from frozen provenance",
+        )
     _require(
         _recorded_path(repo, primal["current_external_receiver"]["path"])
         == current_path,
@@ -456,22 +494,31 @@ def build_runtime(args: argparse.Namespace) -> dict[str, Any]:
     residual = np.asarray(current - truth, dtype=np.float64)
     primal_objective = primal["objective"]
 
-    objective_dt = float(
-        primal_objective.get("dt", driver.dt)
+    recorded_objective_dt = float(
+        primal_objective.get("dt", certified_objective_dt)
     )
-
     _require(
-        objective_dt == float(driver.dt),
-        "parent-forward objective dt differs from certified driver dt",
+        recorded_objective_dt == certified_objective_dt,
+        "parent-forward objective dt differs from certified reference contract",
     )
+    if "driver_dt" in primal_objective:
+        _require(
+            float(primal_objective["driver_dt"]) == float(driver.dt),
+            "parent-forward recorded driver dt differs from current driver",
+        )
 
+    objective_contract = certified_data_objective(
+        current,
+        truth,
+        certified_dt=certified_objective_dt,
+        driver_dt=float(driver.dt),
+    )
+    objective_dt = objective_contract.objective_dt
     objective_weights = trapezoid_weights(
         np.arange(sample_count, dtype=np.float64) * objective_dt
     )
+    objective = objective_contract.value
 
-    objective = 0.5 * float(
-        np.sum(objective_weights[:, None, None] * residual * residual)
-    )
     recorded_j = primal_objective.get(
         "J_external", primal_objective.get("J1")
     )
@@ -484,6 +531,13 @@ def build_runtime(args: argparse.Namespace) -> dict[str, Any]:
         and primal_objective.get("bitwise_equal") is True,
         "parent objective is not reproduced bitwise",
     )
+    if bootstrap_parent:
+        bootstrap_accepted_j = accepted.get("objective", {}).get("accepted")
+        _require(
+            bootstrap_accepted_j is not None
+            and float(bootstrap_accepted_j) == objective,
+            "bootstrap accepted-summary data objective differs from certified primal",
+        )
 
     receiver_nodes = np.asarray(driver.receiver_nodes, dtype=np.int64)
     receiver_weights = np.asarray(driver.receiver_weights, dtype=np.float64)
@@ -526,7 +580,6 @@ def build_runtime(args: argparse.Namespace) -> dict[str, Any]:
         "iteration_engine_config": _file(engine_path),
         "primal_forward_summary": _file(primal_summary_path),
         "accepted_parent_summary": _file(accepted_summary_path),
-        "accepted_trial_summary": _file(trial_path),
         "current_external_receiver": _file(current_path),
         "accepted_external_receiver": _file(accepted_trace),
         "true_external_receiver": _file(true_path),
@@ -538,6 +591,9 @@ def build_runtime(args: argparse.Namespace) -> dict[str, Any]:
         },
         "driver_assets": _driver_hashes(driver),
     }
+    if trial_path is not None:
+        input_hashes["accepted_trial_summary"] = _file(trial_path)
+
     signature_payload = {
         "run_id": run_id,
         "parent_iteration": int(args.iter_k),
@@ -545,6 +601,9 @@ def build_runtime(args: argparse.Namespace) -> dict[str, Any]:
         "transition": paths.identity.transition_id,
         "driver_signature_sha256": driver.signature,
         "input_hashes": input_hashes,
+        "parent_provenance": parent_provenance,
+        "certified_objective_dt": objective_dt,
+        "driver_dt": float(driver.dt),
         "residual_sign": "current_external_receiver - true_external_receiver",
         "weighting": "fixed-dt trapezoidal",
     }
@@ -560,6 +619,11 @@ def build_runtime(args: argparse.Namespace) -> dict[str, Any]:
         "objective_weights": objective_weights,
         "objective": objective,
         "objective_relative": 0.0,
+        "objective_dt": objective_dt,
+        "objective_contract_diagnostic": objective_contract.diagnostic(
+            expected=float(recorded_j)
+        ),
+        "parent_provenance": parent_provenance,
         "receiver_nodes": receiver_nodes,
         "receiver_weights": receiver_weights,
         "checkpoints": checkpoints,
@@ -596,6 +660,8 @@ def preflight(runtime: Mapping[str, Any], args: argparse.Namespace) -> dict[str,
         "mutable_paths_exclude_historical_namespace": True,
         "residual_is_current_minus_true": True,
         "fixed_dt_trapezoidal_weighting": True,
+        "certified_objective_dt_replayed": True,
+        "bootstrap_or_promoted_parent_provenance_valid": True,
         "certified_reverse_delegate": True,
         "no_gpu_capteur_trace": True,
         "no_forward_or_reverse_executed": True,
@@ -612,7 +678,14 @@ def preflight(runtime: Mapping[str, Any], args: argparse.Namespace) -> dict[str,
         "production_signature_sha256": runtime["signature"],
         "checks": checks,
         "contract": {
-            "dt": float(runtime["config"]["forward_operator"]["effective_dt_s"]),
+            "dt": float(runtime["objective_dt"]),
+            "driver_dt": float(runtime["driver"].dt),
+            "dt_ulp_distance": abs(
+                float64_bits(runtime["objective_dt"])
+                - float64_bits(runtime["driver"].dt)
+            ),
+            "objective_dt_source": "certified_reference.contract.dt",
+            "parent_provenance": runtime["parent_provenance"],
             "sample_count": int(runtime["residual"].shape[0]),
             "source_count": int(len(runtime["driver"].source_nodes)),
             "receiver_count": int(runtime["receiver_nodes"].shape[0]),
